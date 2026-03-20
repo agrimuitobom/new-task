@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// ★ リポジトリ名に合わせて変更してください（例: /case-manager/）
+// ★ リポジトリ名に合わせて変更してください（例: /new-task/）
 const BASE = '/new-task/'
 
 export default defineConfig({
