@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const STATUSES = [
   { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
@@ -40,11 +40,22 @@ function daysUntil(dateStr) {
   return Math.ceil(diff / 86400000);
 }
 
+function exportData(cases) {
+  const json = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), cases }, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `案件管理_${new Date().toLocaleDateString("ja-JP").replace(/\//g, "-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function DeadlineBadge({ date }) {
   if (!date) return null;
   const d = daysUntil(date);
   let color = "#64748b", bg = "#f1f5f9", text = `${d}日後`;
-  if (d < 0)      { color = "#dc2626"; bg = "#fef2f2"; text = `${Math.abs(d)}日超過`; }
+  if (d < 0)        { color = "#dc2626"; bg = "#fef2f2"; text = `${Math.abs(d)}日超過`; }
   else if (d === 0) { color = "#dc2626"; bg = "#fef2f2"; text = "本日締切"; }
   else if (d <= 3)  { color = "#d97706"; bg = "#fffbeb"; }
   return (
@@ -55,26 +66,61 @@ function DeadlineBadge({ date }) {
 }
 
 export default function App() {
-  const [cases, setCases]       = useState([]);
+  // アンドゥ対応の cases 履歴管理
+  const [history, setHistory] = useState({ past: [], present: [] });
   const [view, setView]         = useState("kanban");
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew]   = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [searchQuery, setSearchQuery]   = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [kanbanSort, setKanbanSort]     = useState("default"); // "default" | "deadline"
+  const importRef = useRef(null);
 
-  // localStorage で永続化
+  const cases    = history.present;
+  const canUndo  = history.past.length > 0;
+
+  // localStorage 永続化（present のみ保存）
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cases-v1");
-      if (saved) setCases(JSON.parse(saved));
+      if (saved) setHistory({ past: [], present: JSON.parse(saved) });
     } catch {}
   }, []);
 
   useEffect(() => {
     try {
-      localStorage.setItem("cases-v1", JSON.stringify(cases));
+      localStorage.setItem("cases-v1", JSON.stringify(history.present));
     } catch {}
-  }, [cases]);
+  }, [history.present]);
+
+  // Ctrl+Z / Cmd+Z でアンドゥ
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // cases 変更をアンドゥ履歴付きで実行
+  function setCases(updater) {
+    setHistory(h => ({
+      past: [...h.past.slice(-19), h.present],
+      present: typeof updater === "function" ? updater(h.present) : updater,
+    }));
+  }
+
+  function undo() {
+    setHistory(h => {
+      if (h.past.length === 0) return h;
+      return { past: h.past.slice(0, -1), present: h.past[h.past.length - 1] };
+    });
+  }
 
   const selectedCase = cases.find((c) => c.id === selected);
 
@@ -118,15 +164,46 @@ export default function App() {
     });
   }
 
+  // JSON インポート
+  function handleImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.cases && Array.isArray(data.cases)) {
+          if (window.confirm(`${data.cases.length}件の案件を現在のデータに追加します。よろしいですか？`)) {
+            setCases((prev) => [...prev, ...data.cases]);
+          }
+        } else {
+          alert("無効なファイル形式です");
+        }
+      } catch {
+        alert("ファイルの読み込みに失敗しました");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  // 検索・フィルタ後の案件一覧
+  const filteredCases = cases.filter((c) => {
+    const matchSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchStatus = filterStatus === "all" || c.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
+
   const urgentCount = cases.filter((c) => {
     const d = daysUntil(c.deadline);
     return c.status !== "done" && d !== null && d <= 3;
   }).length;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+
       {/* Header */}
-      <div style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, flexShrink: 0, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
           <span style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
@@ -134,7 +211,13 @@ export default function App() {
             <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>⚠ {urgentCount}件</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {canUndo && (
+            <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#374151", "#d1d5db")}>↩ 元に戻す</button>
+          )}
+          <button onClick={() => exportData(cases)} style={btnStyle("#0f766e", "#fff")}>⬇ エクスポート</button>
+          <button onClick={() => importRef.current?.click()} style={btnStyle("#374151", "#d1d5db")}>⬆ インポート</button>
+          <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImport} />
           <button onClick={() => setShowTemplate(true)} style={btnStyle("#3730a3", "#fff")}>📄 テンプレ</button>
           <button onClick={() => { setShowNew(true); setSelected(null); }} style={btnStyle("#6366f1", "#fff")}>＋ 新規</button>
           <button onClick={() => setView(v => v === "kanban" ? "list" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
@@ -143,12 +226,52 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 58px)" }}>
+      {/* 検索・フィルターバー */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "8px 16px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 案件名で検索…"
+          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 11px", fontSize: 12, outline: "none", width: 180, color: "#1e1b4b" }}
+        />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setFilterStatus("all")}
+            style={filterBtnStyle(filterStatus === "all", "#6366f1", "#fff", "#f1f5f9", "#64748b")}>すべて</button>
+          {STATUSES.map((s) => (
+            <button key={s.id} onClick={() => setFilterStatus(s.id)}
+              style={filterBtnStyle(filterStatus === s.id, s.bg, s.color, "#f1f5f9", "#64748b", s.dot)}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {view === "kanban" && (
+          <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+            <span style={{ fontSize: 11, color: "#94a3b8", alignSelf: "center" }}>並び順:</span>
+            <button onClick={() => setKanbanSort("default")}
+              style={filterBtnStyle(kanbanSort === "default", "#6366f1", "#fff", "#f1f5f9", "#64748b")}>標準</button>
+            <button onClick={() => setKanbanSort("deadline")}
+              style={filterBtnStyle(kanbanSort === "deadline", "#6366f1", "#fff", "#f1f5f9", "#64748b")}>期限順</button>
+          </div>
+        )}
+        {(searchQuery || filterStatus !== "all") && (
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>
+            {filteredCases.length}件 / 全{cases.length}件
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")}
+                style={{ marginLeft: 6, background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 11 }}>✕ クリア</button>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* メインコンテンツ */}
+      <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
-            <KanbanView cases={cases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
+            <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected}
+              onStatusChange={(id, s) => updateCase(id, { status: s })} sortBy={kanbanSort} />
           ) : (
-            <ListView cases={cases} onSelect={setSelected} selectedId={selected} />
+            <ListView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
           )}
         </div>
 
@@ -190,11 +313,18 @@ export default function App() {
   );
 }
 
-function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
+function KanbanView({ cases, onSelect, selectedId, onStatusChange, sortBy }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
       {STATUSES.map((s) => {
-        const cols = cases.filter((c) => c.status === s.id);
+        let cols = cases.filter((c) => c.status === s.id);
+        if (sortBy === "deadline") {
+          cols = [...cols].sort((a, b) => {
+            const da = a.deadline ? new Date(a.deadline) : new Date("9999");
+            const db = b.deadline ? new Date(b.deadline) : new Date("9999");
+            return da - db;
+          });
+        }
         return (
           <div key={s.id}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
@@ -300,12 +430,30 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
+  function handleNameBlur() {
+    const trimmed = nameVal.trim();
+    if (!trimmed) {
+      setNameVal(c.name); // 空なら元に戻す
+    } else {
+      onUpdate({ name: trimmed });
+    }
+    setEditName(false);
+  }
+
+  function handleDeleteTask(tid, label) {
+    if (window.confirm(`タスク「${label}」を削除しますか？`)) {
+      onDeleteTask(tid);
+    }
+  }
+
   return (
     <div style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
-            onBlur={() => { onUpdate({ name: nameVal }); setEditName(false); }} autoFocus
+            onBlur={handleNameBlur}
+            onKeyDown={(e) => { if (e.key === "Enter") handleNameBlur(); if (e.key === "Escape") { setNameVal(c.name); setEditName(false); } }}
+            autoFocus
             style={{ fontSize: 14, fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
         ) : (
           <div style={{ fontWeight: 700, fontSize: 14, color: "#1e1b4b", cursor: "pointer", flex: 1 }} onClick={() => setEditName(true)}>
@@ -339,14 +487,16 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>タスク ({c.tasks.filter(t=>t.done).length}/{c.tasks.length})</label>
+        <label style={labelStyle}>タスク ({c.tasks.filter(t => t.done).length}/{c.tasks.length})</label>
         <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 7 }}>
           {c.tasks.map((t) => (
             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t.id)}
                 style={{ accentColor: "#6366f1", width: 14, height: 14, cursor: "pointer" }} />
               <span style={{ flex: 1, fontSize: 12, color: t.done ? "#94a3b8" : "#1e1b4b", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-              <button onClick={() => onDeleteTask(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 13, padding: 0 }}>×</button>
+              <button onClick={() => handleDeleteTask(t.id, t.label)}
+                title="タスクを削除"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 13, padding: 0 }}>×</button>
             </div>
           ))}
         </div>
@@ -384,12 +534,16 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
 }
 
 function NewCaseModal({ onAdd, onClose }) {
-  const [name, setName]       = useState("");
-  const [status, setStatus]   = useState("draft");
+  const [name, setName]         = useState("");
+  const [status, setStatus]     = useState("draft");
   const [deadline, setDeadline] = useState("");
+  const [error, setError]       = useState("");
 
   function submit() {
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setError("案件名を入力してください");
+      return;
+    }
     onAdd({ name: name.trim(), status, deadline });
     onClose();
   }
@@ -399,9 +553,11 @@ function NewCaseModal({ onAdd, onClose }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={labelStyle}>案件名 *</label>
-          <input value={name} onChange={(e) => setName(e.target.value)}
+          <input value={name} onChange={(e) => { setName(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
-            placeholder="例：〇〇事業補助金申請" style={inputStyle} />
+            placeholder="例：〇〇事業補助金申請"
+            style={{ ...inputStyle, borderColor: error ? "#dc2626" : "#e2e8f0" }} />
+          {error && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4 }}>{error}</div>}
         </div>
         <div>
           <label style={labelStyle}>初期ステータス</label>
@@ -446,6 +602,16 @@ function Modal({ onClose, title, children }) {
 
 const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" };
 const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 11px", fontSize: 13, outline: "none", boxSizing: "border-box", color: "#1e1b4b" };
+
 function btnStyle(bg, color) {
   return { background: bg, color, border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" };
+}
+
+function filterBtnStyle(active, activeBg, activeColor, inactiveBg, inactiveColor, dot) {
+  return {
+    padding: "3px 10px", fontSize: 11, borderRadius: 6, border: "none", cursor: "pointer", fontWeight: 600,
+    background: active ? activeBg : inactiveBg,
+    color: active ? activeColor : inactiveColor,
+    outline: active && dot ? `2px solid ${dot}88` : "none",
+  };
 }
