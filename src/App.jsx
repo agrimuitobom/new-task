@@ -126,6 +126,63 @@ export default function App() {
     pushHistory(cases);
   }, [cases, pushHistory]);
 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [notifyEnabled, setNotifyEnabled] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+
+  // オンライン/オフライン状態の監視
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
+  }, []);
+
+  // ブラウザ通知：期限が近い案件を通知
+  const checkAndNotify = useCallback((caseList) => {
+    if (Notification.permission !== "granted") return;
+    const urgent = caseList.filter((c) => {
+      if (c.status === "done") return false;
+      const d = daysUntil(c.deadline);
+      return d !== null && d <= 3;
+    });
+    if (urgent.length === 0) return;
+    const notifiedKey = "notified-date";
+    const today = new Date().toISOString().slice(0, 10);
+    try { if (localStorage.getItem(notifiedKey) === today) return; } catch {}
+    const body = urgent.map((c) => {
+      const d = daysUntil(c.deadline);
+      const label = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? "本日締切" : `あと${d}日`;
+      return `・${c.name}（${label}）`;
+    }).join("\n");
+    new Notification("案件管理 - 期限通知", { body, icon: "./icon-192.png" });
+    try { localStorage.setItem(notifiedKey, today); } catch {}
+  }, []);
+
+  function requestNotification() {
+    if (!("Notification" in window)) { alert("このブラウザは通知に対応していません"); return; }
+    Notification.requestPermission().then((perm) => {
+      setNotifyEnabled(perm === "granted");
+      if (perm === "granted") checkAndNotify(cases);
+    });
+  }
+
+  // 起動時に通知チェック
+  const initialNotifyDone = useRef(false);
+  useEffect(() => {
+    if (cases.length > 0 && !initialNotifyDone.current) {
+      initialNotifyDone.current = true;
+      checkAndNotify(cases);
+    }
+  }, [cases, checkAndNotify]);
+
+  // 30分ごとに通知チェック
+  useEffect(() => {
+    if (Notification.permission !== "granted") return;
+    const interval = setInterval(() => checkAndNotify(cases), 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [cases, checkAndNotify]);
+
   const [showDataMenu, setShowDataMenu] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -227,16 +284,27 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+      <InjectMobileCSS />
+      {isOffline && (
+        <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
+          オフラインモード — データはローカルに保存されます
+        </div>
+      )}
       {/* Header */}
-      <div style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
+      <div className="app-header" style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
+          <span className="app-title" style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
           {urgentCount > 0 && (
             <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>⚠ {urgentCount}件</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="app-header-buttons" style={{ display: "flex", gap: 6 }}>
+          {notifyEnabled ? (
+            <button onClick={() => checkAndNotify(cases)} title="通知チェック" style={btnStyle("#312e81", "#a5b4fc")}>🔔</button>
+          ) : (
+            <button onClick={requestNotification} title="通知を有効にする" style={btnStyle("#312e81", "#64748b")}>🔕</button>
+          )}
           <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
           <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
           <div style={{ position: "relative" }}>
@@ -262,14 +330,14 @@ export default function App() {
       </div>
 
       {/* Search & Filter Bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+      <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
         <input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="🔍 案件名で検索…"
           style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: 13, outline: "none", color: "#1e1b4b" }}
         />
-        <div style={{ display: "flex", gap: 4 }}>
+        <div className="filter-buttons" style={{ display: "flex", gap: 4 }}>
           <button onClick={() => setFilterStatus("all")}
             style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
               background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
@@ -295,7 +363,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
+      <div className="main-content" style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
             <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
@@ -360,12 +428,12 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
+    <div className="kanban-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
       {STATUSES.map((s) => {
         const cols = cases.filter((c) => c.status === s.id);
         const isOver = dragOverStatus === s.id;
         return (
-          <div key={s.id}
+          <div key={s.id} className="kanban-column"
             onDragOver={(e) => handleDragOver(e, s.id)}
             onDrop={(e) => handleDrop(e, s.id)}
             onDragLeave={handleDragLeave}
@@ -396,7 +464,7 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
 function ListView({ cases, onSelect, selectedId }) {
   return (
     <div style={{ maxWidth: 800 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="list-table" style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
             {["案件名", "ステータス", "期限", "タスク"].map((h) => (
@@ -475,7 +543,7 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
   return (
-    <div style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
+    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
@@ -616,6 +684,39 @@ function Modal({ onClose, title, children }) {
       </div>
     </div>
   );
+}
+
+// モバイル対応CSS（styleタグで挿入）
+const mobileCSS = `
+@media (max-width: 768px) {
+  .app-header { height: auto !important; padding: 8px 12px !important; }
+  .app-header-buttons { gap: 4px !important; }
+  .app-header-buttons button { padding: 5px 8px !important; font-size: 11px !important; }
+  .search-bar { padding: 8px 12px !important; gap: 6px !important; }
+  .search-bar input { min-width: 100px !important; font-size: 12px !important; }
+  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .filter-buttons button { white-space: nowrap; font-size: 10px !important; padding: 3px 7px !important; }
+  .main-content { flex-direction: column !important; }
+  .kanban-grid { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; gap: 12px !important; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+  .kanban-column { min-width: 220px !important; flex-shrink: 0 !important; scroll-snap-align: start; }
+  .detail-panel { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 50vh; position: relative !important; }
+  .list-table { font-size: 11px !important; }
+  .list-table td, .list-table th { padding: 6px 5px !important; }
+}
+@media (max-width: 480px) {
+  .kanban-column { min-width: 180px !important; }
+  .app-title { font-size: 14px !important; }
+}
+`;
+
+function InjectMobileCSS() {
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = mobileCSS;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+  return null;
 }
 
 const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" };
