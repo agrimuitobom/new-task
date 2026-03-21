@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const STATUSES = [
   { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
@@ -61,12 +61,61 @@ export default function App() {
   const [showNew, setShowNew]   = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [sortKey, setSortKey] = useState("deadline");
+
+  // Undo/Redo 履歴管理
+  const historyRef = useRef([]);
+  const historyIndexRef = useRef(-1);
+  const isUndoRedoRef = useRef(false);
+
+  const pushHistory = useCallback((snapshot) => {
+    if (isUndoRedoRef.current) return;
+    const idx = historyIndexRef.current;
+    historyRef.current = historyRef.current.slice(0, idx + 1);
+    historyRef.current.push(JSON.stringify(snapshot));
+    if (historyRef.current.length > 50) historyRef.current.shift();
+    historyIndexRef.current = historyRef.current.length - 1;
+  }, []);
+
+  const undo = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    isUndoRedoRef.current = true;
+    setCases(JSON.parse(historyRef.current[historyIndexRef.current]));
+    isUndoRedoRef.current = false;
+  }, []);
+
+  const redo = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    isUndoRedoRef.current = true;
+    setCases(JSON.parse(historyRef.current[historyIndexRef.current]));
+    isUndoRedoRef.current = false;
+  }, []);
+
+  // Ctrl+Z / Ctrl+Shift+Z キーボードショートカット
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "y") { e.preventDefault(); redo(); }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   // localStorage で永続化
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cases-v1");
-      if (saved) setCases(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCases(parsed);
+        historyRef.current = [JSON.stringify(parsed)];
+        historyIndexRef.current = 0;
+      }
     } catch {}
   }, []);
 
@@ -74,7 +123,44 @@ export default function App() {
     try {
       localStorage.setItem("cases-v1", JSON.stringify(cases));
     } catch {}
-  }, [cases]);
+    pushHistory(cases);
+  }, [cases, pushHistory]);
+
+  const [showDataMenu, setShowDataMenu] = useState(false);
+  const fileInputRef = useRef(null);
+
+  function exportData() {
+    const blob = new Blob([JSON.stringify(cases, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `案件データ_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowDataMenu(false);
+  }
+
+  function importData(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (Array.isArray(data)) {
+          setCases(data);
+          setSelected(null);
+        } else {
+          alert("無効なデータ形式です");
+        }
+      } catch {
+        alert("JSONの読み込みに失敗しました");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+    setShowDataMenu(false);
+  }
 
   const selectedCase = cases.find((c) => c.id === selected);
 
@@ -118,6 +204,22 @@ export default function App() {
     });
   }
 
+  const filteredCases = cases.filter((c) => {
+    const matchesSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === "all" || c.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    if (sortKey === "deadline") {
+      const da = a.deadline ? new Date(a.deadline) : new Date("9999");
+      const db = b.deadline ? new Date(b.deadline) : new Date("9999");
+      return da - db;
+    }
+    if (sortKey === "name") return a.name.localeCompare(b.name, "ja");
+    if (sortKey === "created") return (a.id > b.id ? 1 : -1);
+    if (sortKey === "created_desc") return (a.id < b.id ? 1 : -1);
+    return 0;
+  });
+
   const urgentCount = cases.filter((c) => {
     const d = daysUntil(c.deadline);
     return c.status !== "done" && d !== null && d <= 3;
@@ -135,6 +237,22 @@ export default function App() {
           )}
         </div>
         <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
+          <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowDataMenu((v) => !v)} style={btnStyle("#312e81", "#a5b4fc")}>💾 データ</button>
+            {showDataMenu && (
+              <div style={{ position: "absolute", top: "110%", right: 0, background: "#fff", borderRadius: 10, boxShadow: "0 4px 20px #00000020", padding: 6, zIndex: 50, minWidth: 140 }}>
+                <button onClick={exportData} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 12, cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
+                  📥 エクスポート
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 12, cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
+                  📤 インポート
+                </button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
+              </div>
+            )}
+          </div>
           <button onClick={() => setShowTemplate(true)} style={btnStyle("#3730a3", "#fff")}>📄 テンプレ</button>
           <button onClick={() => { setShowNew(true); setSelected(null); }} style={btnStyle("#6366f1", "#fff")}>＋ 新規</button>
           <button onClick={() => setView(v => v === "kanban" ? "list" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
@@ -143,12 +261,46 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 58px)" }}>
+      {/* Search & Filter Bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 案件名で検索…"
+          style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: 13, outline: "none", color: "#1e1b4b" }}
+        />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setFilterStatus("all")}
+            style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
+              background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
+            すべて
+          </button>
+          {STATUSES.map((s) => (
+            <button key={s.id} onClick={() => setFilterStatus(s.id)}
+              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
+                background: filterStatus === s.id ? s.bg : "#f1f5f9", color: filterStatus === s.id ? s.color : "#94a3b8" }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <select value={sortKey} onChange={(e) => setSortKey(e.target.value)}
+          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 8px", fontSize: 12, color: "#1e1b4b", outline: "none", background: "#fff" }}>
+          <option value="deadline">期限順</option>
+          <option value="name">名前順</option>
+          <option value="created">作成日（古い順）</option>
+          <option value="created_desc">作成日（新しい順）</option>
+        </select>
+        {(searchQuery || filterStatus !== "all") && (
+          <span style={{ fontSize: 11, color: "#64748b" }}>{filteredCases.length}件</span>
+        )}
+      </div>
+
+      <div style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
-            <KanbanView cases={cases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
+            <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
           ) : (
-            <ListView cases={cases} onSelect={setSelected} selectedId={selected} />
+            <ListView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
           )}
         </div>
 
@@ -191,12 +343,34 @@ export default function App() {
 }
 
 function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
+  const [dragOverStatus, setDragOverStatus] = useState(null);
+
+  function handleDragOver(e, statusId) {
+    e.preventDefault();
+    setDragOverStatus(statusId);
+  }
+  function handleDrop(e, statusId) {
+    e.preventDefault();
+    const caseId = e.dataTransfer.getData("text/plain");
+    if (caseId) onStatusChange(caseId, statusId);
+    setDragOverStatus(null);
+  }
+  function handleDragLeave() {
+    setDragOverStatus(null);
+  }
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
       {STATUSES.map((s) => {
         const cols = cases.filter((c) => c.status === s.id);
+        const isOver = dragOverStatus === s.id;
         return (
-          <div key={s.id}>
+          <div key={s.id}
+            onDragOver={(e) => handleDragOver(e, s.id)}
+            onDrop={(e) => handleDrop(e, s.id)}
+            onDragLeave={handleDragLeave}
+            style={{ borderRadius: 10, padding: 6, minHeight: 80, transition: "background 0.15s",
+              background: isOver ? s.bg : "transparent", border: isOver ? `2px dashed ${s.color}44` : "2px dashed transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
               <div style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot }} />
               <span style={{ fontWeight: 700, color: s.color, fontSize: 12 }}>{s.label}</span>
@@ -207,7 +381,9 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
                 <CaseCard key={c.id} c={c} onClick={() => onSelect(c.id)} isSelected={selectedId === c.id} onStatusChange={onStatusChange} />
               ))}
               {cols.length === 0 && (
-                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: 12, padding: "16px 0" }}>なし</div>
+                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: 12, padding: "16px 0" }}>
+                  {isOver ? "ここにドロップ" : "なし"}
+                </div>
               )}
             </div>
           </div>
@@ -218,11 +394,6 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
 }
 
 function ListView({ cases, onSelect, selectedId }) {
-  const sorted = [...cases].sort((a, b) => {
-    const da = a.deadline ? new Date(a.deadline) : new Date("9999");
-    const db = b.deadline ? new Date(b.deadline) : new Date("9999");
-    return da - db;
-  });
   return (
     <div style={{ maxWidth: 800 }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -234,7 +405,7 @@ function ListView({ cases, onSelect, selectedId }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((c) => {
+          {cases.map((c) => {
             const st = STATUSES.find((s) => s.id === c.status);
             const done = c.tasks.filter((t) => t.done).length;
             return (
@@ -249,7 +420,7 @@ function ListView({ cases, onSelect, selectedId }) {
               </tr>
             );
           })}
-          {sorted.length === 0 && (
+          {cases.length === 0 && (
             <tr><td colSpan={4} style={{ textAlign: "center", color: "#cbd5e1", padding: 40 }}>案件がありません</td></tr>
           )}
         </tbody>
@@ -262,8 +433,11 @@ function CaseCard({ c, onClick, isSelected, onStatusChange }) {
   const done = c.tasks.filter((t) => t.done).length;
   const total = c.tasks.length;
   return (
-    <div onClick={onClick} style={{
-      background: "#fff", borderRadius: 12, padding: "11px 13px", cursor: "pointer",
+    <div
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; }}
+      onClick={onClick} style={{
+      background: "#fff", borderRadius: 12, padding: "11px 13px", cursor: "grab",
       border: isSelected ? "2px solid #6366f1" : "2px solid transparent",
       boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 4px #00000010",
     }}>
