@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { auth, googleProvider, db } from "./firebase";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 const STATUSES = [
   { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
@@ -55,6 +58,8 @@ function DeadlineBadge({ date }) {
 }
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [cases, setCases]       = useState([]);
   const [view, setView]         = useState("kanban");
   const [selected, setSelected] = useState(null);
@@ -64,6 +69,22 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortKey, setSortKey] = useState("deadline");
+
+  // Firebase Auth 監視
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); });
+    return unsub;
+  }, []);
+
+  async function handleLogin() {
+    try { await signInWithPopup(auth, googleProvider); }
+    catch (e) { if (e.code !== "auth/popup-closed-by-user") alert("ログインに失敗しました: " + e.message); }
+  }
+  async function handleLogout() {
+    await signOut(auth);
+    setCases([]);
+    setSelected(null);
+  }
 
   // Undo/Redo 履歴管理
   const historyRef = useRef([]);
@@ -106,25 +127,112 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo]);
 
-  // localStorage で永続化
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("cases-v1");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setCases(parsed);
-        historyRef.current = [JSON.stringify(parsed)];
-        historyIndexRef.current = 0;
-      }
-    } catch {}
-  }, []);
+  // Firestore リアルタイム同期（ログイン時）/ localStorage（未ログイン時）
+  const firestoreSkipRef = useRef(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("cases-v1", JSON.stringify(cases));
-    } catch {}
+    if (authLoading) return;
+    if (!user) {
+      // 未ログイン時はlocalStorageから読み込み
+      try {
+        const saved = localStorage.getItem("cases-v1");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setCases(parsed);
+          historyRef.current = [JSON.stringify(parsed)];
+          historyIndexRef.current = 0;
+        }
+      } catch {}
+      return;
+    }
+    // Firestoreからリアルタイム購読
+    const colRef = collection(db, "users", user.uid, "cases");
+    const unsub = onSnapshot(colRef, (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      firestoreSkipRef.current = true;
+      setCases(data);
+      historyRef.current = [JSON.stringify(data)];
+      historyIndexRef.current = 0;
+      firestoreSkipRef.current = false;
+    }, (err) => {
+      console.error("Firestore sync error:", err);
+    });
+    return unsub;
+  }, [user, authLoading]);
+
+  // cases変更時にFirestore/localStorageに保存
+  useEffect(() => {
+    if (authLoading) return;
     pushHistory(cases);
-  }, [cases, pushHistory]);
+    if (!user) {
+      try { localStorage.setItem("cases-v1", JSON.stringify(cases)); } catch {}
+      return;
+    }
+    if (firestoreSkipRef.current) return;
+    // Firestoreに同期
+    const colRef = collection(db, "users", user.uid, "cases");
+    cases.forEach((c) => {
+      const { id, ...data } = c;
+      setDoc(doc(colRef, id), data).catch(() => {});
+    });
+  }, [cases, user, authLoading, pushHistory]);
+
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [notifyEnabled, setNotifyEnabled] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+
+  // オンライン/オフライン状態の監視
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
+  }, []);
+
+  // ブラウザ通知：期限が近い案件を通知
+  const checkAndNotify = useCallback((caseList) => {
+    if (Notification.permission !== "granted") return;
+    const urgent = caseList.filter((c) => {
+      if (c.status === "done") return false;
+      const d = daysUntil(c.deadline);
+      return d !== null && d <= 3;
+    });
+    if (urgent.length === 0) return;
+    const notifiedKey = "notified-date";
+    const today = new Date().toISOString().slice(0, 10);
+    try { if (localStorage.getItem(notifiedKey) === today) return; } catch {}
+    const body = urgent.map((c) => {
+      const d = daysUntil(c.deadline);
+      const label = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? "本日締切" : `あと${d}日`;
+      return `・${c.name}（${label}）`;
+    }).join("\n");
+    new Notification("案件管理 - 期限通知", { body, icon: "./icon-192.png" });
+    try { localStorage.setItem(notifiedKey, today); } catch {}
+  }, []);
+
+  function requestNotification() {
+    if (!("Notification" in window)) { alert("このブラウザは通知に対応していません"); return; }
+    Notification.requestPermission().then((perm) => {
+      setNotifyEnabled(perm === "granted");
+      if (perm === "granted") checkAndNotify(cases);
+    });
+  }
+
+  // 起動時に通知チェック
+  const initialNotifyDone = useRef(false);
+  useEffect(() => {
+    if (cases.length > 0 && !initialNotifyDone.current) {
+      initialNotifyDone.current = true;
+      checkAndNotify(cases);
+    }
+  }, [cases, checkAndNotify]);
+
+  // 30分ごとに通知チェック
+  useEffect(() => {
+    if (Notification.permission !== "granted") return;
+    const interval = setInterval(() => checkAndNotify(cases), 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [cases, checkAndNotify]);
 
   const [showDataMenu, setShowDataMenu] = useState(false);
   const fileInputRef = useRef(null);
@@ -150,6 +258,13 @@ export default function App() {
         if (Array.isArray(data)) {
           setCases(data);
           setSelected(null);
+          // Firestoreにも一括書き込み
+          if (user) {
+            const colRef = collection(db, "users", user.uid, "cases");
+            const batch = writeBatch(db);
+            data.forEach((c) => { const { id, ...rest } = c; batch.set(doc(colRef, id), rest); });
+            batch.commit().catch(() => {});
+          }
         } else {
           alert("無効なデータ形式です");
         }
@@ -173,6 +288,7 @@ export default function App() {
   function deleteCase(id) {
     setCases((prev) => prev.filter((c) => c.id !== id));
     if (selected === id) setSelected(null);
+    if (user) deleteDoc(doc(db, "users", user.uid, "cases", id)).catch(() => {});
   }
   function addTask(caseId, label) {
     setCases((prev) =>
@@ -225,18 +341,54 @@ export default function App() {
     return c.status !== "done" && d !== null && d <= 3;
   }).length;
 
+  // ログイン画面
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+        <div style={{ textAlign: "center", color: "#64748b" }}>読み込み中…</div>
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: "40px 36px", boxShadow: "0 4px 24px #00000012", textAlign: "center", maxWidth: 380 }}>
+          <div style={{ width: 56, height: 56, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>📋</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px" }}>案件管理</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px" }}>複数デバイスでタスクを同期管理</p>
+          <button onClick={handleLogin}
+            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 1px 4px #00000010" }}>
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.35 2.56 10.51l7.97-5.92z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.92C6.51 42.62 14.62 48 24 48z"/></svg>
+            Googleでログイン
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+      <InjectMobileCSS />
+      {isOffline && (
+        <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
+          オフラインモード — データはローカルに保存されます
+        </div>
+      )}
       {/* Header */}
-      <div style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
+      <div className="app-header" style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
+          <span className="app-title" style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
           {urgentCount > 0 && (
             <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>⚠ {urgentCount}件</span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="app-header-buttons" style={{ display: "flex", gap: 6 }}>
+          {notifyEnabled ? (
+            <button onClick={() => checkAndNotify(cases)} title="通知チェック" style={btnStyle("#312e81", "#a5b4fc")}>🔔</button>
+          ) : (
+            <button onClick={requestNotification} title="通知を有効にする" style={btnStyle("#312e81", "#64748b")}>🔕</button>
+          )}
           <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
           <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
           <div style={{ position: "relative" }}>
@@ -258,18 +410,23 @@ export default function App() {
           <button onClick={() => setView(v => v === "kanban" ? "list" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
             {view === "kanban" ? "≡" : "⊞"}
           </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
+            {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%" }} referrerPolicy="no-referrer" />}
+            <span style={{ fontSize: 11, color: "#a5b4fc", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.displayName?.split(" ")[0]}</span>
+            <button onClick={handleLogout} title="ログアウト" style={btnStyle("#312e81", "#94a3b8")}>↗</button>
+          </div>
         </div>
       </div>
 
       {/* Search & Filter Bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+      <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
         <input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="🔍 案件名で検索…"
           style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: 13, outline: "none", color: "#1e1b4b" }}
         />
-        <div style={{ display: "flex", gap: 4 }}>
+        <div className="filter-buttons" style={{ display: "flex", gap: 4 }}>
           <button onClick={() => setFilterStatus("all")}
             style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
               background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
@@ -295,7 +452,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
+      <div className="main-content" style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
             <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
@@ -360,12 +517,12 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
+    <div className="kanban-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
       {STATUSES.map((s) => {
         const cols = cases.filter((c) => c.status === s.id);
         const isOver = dragOverStatus === s.id;
         return (
-          <div key={s.id}
+          <div key={s.id} className="kanban-column"
             onDragOver={(e) => handleDragOver(e, s.id)}
             onDrop={(e) => handleDrop(e, s.id)}
             onDragLeave={handleDragLeave}
@@ -396,7 +553,7 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
 function ListView({ cases, onSelect, selectedId }) {
   return (
     <div style={{ maxWidth: 800 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="list-table" style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
             {["案件名", "ステータス", "期限", "タスク"].map((h) => (
@@ -475,7 +632,7 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
   return (
-    <div style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
+    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
@@ -616,6 +773,39 @@ function Modal({ onClose, title, children }) {
       </div>
     </div>
   );
+}
+
+// モバイル対応CSS（styleタグで挿入）
+const mobileCSS = `
+@media (max-width: 768px) {
+  .app-header { height: auto !important; padding: 8px 12px !important; }
+  .app-header-buttons { gap: 4px !important; }
+  .app-header-buttons button { padding: 5px 8px !important; font-size: 11px !important; }
+  .search-bar { padding: 8px 12px !important; gap: 6px !important; }
+  .search-bar input { min-width: 100px !important; font-size: 12px !important; }
+  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .filter-buttons button { white-space: nowrap; font-size: 10px !important; padding: 3px 7px !important; }
+  .main-content { flex-direction: column !important; }
+  .kanban-grid { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; gap: 12px !important; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+  .kanban-column { min-width: 220px !important; flex-shrink: 0 !important; scroll-snap-align: start; }
+  .detail-panel { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 50vh; position: relative !important; }
+  .list-table { font-size: 11px !important; }
+  .list-table td, .list-table th { padding: 6px 5px !important; }
+}
+@media (max-width: 480px) {
+  .kanban-column { min-width: 180px !important; }
+  .app-title { font-size: 14px !important; }
+}
+`;
+
+function InjectMobileCSS() {
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = mobileCSS;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+  return null;
 }
 
 const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" };
