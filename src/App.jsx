@@ -407,8 +407,8 @@ export default function App() {
           </div>
           <button onClick={() => setShowTemplate(true)} style={btnStyle("#3730a3", "#fff")}>📄 テンプレ</button>
           <button onClick={() => { setShowNew(true); setSelected(null); }} style={btnStyle("#6366f1", "#fff")}>＋ 新規</button>
-          <button onClick={() => setView(v => v === "kanban" ? "list" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
-            {view === "kanban" ? "≡" : "⊞"}
+          <button onClick={() => setView(v => v === "kanban" ? "list" : v === "list" ? "gantt" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
+            {view === "kanban" ? "≡ リスト" : view === "list" ? "📊 ガント" : "⊞ カンバン"}
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
             {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%" }} referrerPolicy="no-referrer" />}
@@ -456,8 +456,10 @@ export default function App() {
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
             <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
-          ) : (
+          ) : view === "list" ? (
             <ListView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
+          ) : (
+            <GanttView cases={filteredCases} onSelect={setSelected} selectedId={selected} onUpdate={updateCase} />
           )}
         </div>
 
@@ -586,6 +588,277 @@ function ListView({ cases, onSelect, selectedId }) {
   );
 }
 
+function GanttView({ cases, onSelect, selectedId, onUpdate }) {
+  const DAY_W = 36;
+  const ROW_H = 56;
+  const LEFT_W = 260;
+  const HEADER_H = 70;
+  const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+  // 案件の日付範囲を計算
+  const casesWithDates = cases.filter((c) => c.deadline).map((c) => {
+    const end = new Date(c.deadline);
+    let start;
+    if (c.startDate) {
+      start = new Date(c.startDate);
+    } else {
+      // startDateがない場合、deadline の14日前をデフォルト
+      start = new Date(end);
+      start.setDate(start.getDate() - 14);
+    }
+    return { ...c, _start: start, _end: end };
+  });
+
+  // タイムライン範囲
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let rangeStart, rangeEnd;
+
+  if (casesWithDates.length > 0) {
+    rangeStart = new Date(Math.min(...casesWithDates.map((c) => c._start), today));
+    rangeEnd = new Date(Math.max(...casesWithDates.map((c) => c._end)));
+  } else {
+    rangeStart = new Date(today);
+    rangeEnd = new Date(today);
+    rangeEnd.setDate(rangeEnd.getDate() + 30);
+  }
+  // 前後に余裕
+  rangeStart.setDate(rangeStart.getDate() - 3);
+  rangeEnd.setDate(rangeEnd.getDate() + 7);
+
+  // 日付配列を生成
+  const days = [];
+  const d = new Date(rangeStart);
+  while (d <= rangeEnd) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+
+  // 月ヘッダーを生成
+  const months = [];
+  let currentMonth = null;
+  days.forEach((day, i) => {
+    const key = `${day.getFullYear()}-${day.getMonth()}`;
+    if (key !== currentMonth) {
+      months.push({ year: day.getFullYear(), month: day.getMonth() + 1, startIdx: i, count: 1 });
+      currentMonth = key;
+    } else {
+      months[months.length - 1].count++;
+    }
+  });
+
+  // 営業日計算
+  function countBusinessDays(start, end) {
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  }
+
+  // バーの位置計算
+  function getBarStyle(caseItem) {
+    const startDiff = Math.round((caseItem._start - rangeStart) / 86400000);
+    const duration = Math.round((caseItem._end - caseItem._start) / 86400000) + 1;
+    const st = STATUSES.find((s) => s.id === caseItem.status);
+    return {
+      left: startDiff * DAY_W,
+      width: Math.max(duration * DAY_W - 4, DAY_W),
+      color: st?.color || "#6366f1",
+      bg: st?.dot || "#818cf8",
+    };
+  }
+
+  // 今日のインデックス
+  const todayIdx = Math.round((today - rangeStart) / 86400000);
+
+  // スケジュール概要
+  const summary = casesWithDates.length > 0 ? {
+    start: new Date(Math.min(...casesWithDates.map((c) => c._start))),
+    end: new Date(Math.max(...casesWithDates.map((c) => c._end))),
+  } : null;
+
+  const timelineRef = useRef(null);
+
+  // 初回マウント時に今日の位置へスクロール
+  useEffect(() => {
+    if (timelineRef.current && todayIdx > 3) {
+      timelineRef.current.scrollLeft = (todayIdx - 3) * DAY_W;
+    }
+  }, []);
+
+  const allCases = cases.length > 0 ? cases : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", maxWidth: "100%", overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {/* 左パネル: タスクリスト */}
+        <div style={{ width: LEFT_W, flexShrink: 0, borderRight: "2px solid #e2e8f0", background: "#fff", overflow: "auto" }}>
+          {/* ヘッダー行 */}
+          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-end", padding: "0 12px 8px", fontSize: 11, fontWeight: 700, color: "#64748b" }}>
+            <span style={{ flex: 1 }}>タスク名</span>
+            <span style={{ width: 40, textAlign: "center" }}>日数</span>
+          </div>
+          {/* タスク行 */}
+          {allCases.map((c) => {
+            const st = STATUSES.find((s) => s.id === c.status);
+            const cwd = casesWithDates.find((cw) => cw.id === c.id);
+            const duration = cwd ? Math.round((cwd._end - cwd._start) / 86400000) + 1 : "—";
+            return (
+              <div key={c.id} onClick={() => onSelect(c.id)}
+                style={{
+                  height: ROW_H, display: "flex", alignItems: "center", padding: "0 12px", gap: 8,
+                  borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                  background: selectedId === c.id ? "#eef2ff" : "#fff",
+                }}>
+                <div style={{ color: "#cbd5e1", fontSize: 12, cursor: "grab", userSelect: "none" }}>⫶</div>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: st?.dot || "#cbd5e1", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                </div>
+                <div style={{ width: 40, textAlign: "center", fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                  {typeof duration === "number" ? `${duration}日` : duration}
+                </div>
+              </div>
+            );
+          })}
+          {allCases.length === 0 && (
+            <div style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: 13 }}>案件がありません</div>
+          )}
+
+          {/* スケジュール概要 */}
+          {summary && (
+            <div style={{ margin: 12, padding: 14, background: "#f8f7f4", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                スケジュール概要 <span style={{ color: "#94a3b8", fontSize: 10 }}>▼</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#1e1b4b", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
+                <span style={{ color: "#64748b" }}>開始日</span>
+                <span style={{ fontWeight: 700 }}>{summary.start.getFullYear()}年{summary.start.getMonth() + 1}月{summary.start.getDate()}日</span>
+                <span style={{ color: "#64748b" }}>完了日</span>
+                <span style={{ fontWeight: 700 }}>{summary.end.getFullYear()}年{summary.end.getMonth() + 1}月{summary.end.getDate()}日</span>
+                <span style={{ color: "#64748b" }}>合計営業日</span>
+                <span style={{ fontWeight: 700 }}>{countBusinessDays(summary.start, summary.end)}日</span>
+                <span style={{ color: "#64748b" }}>期間</span>
+                <span style={{ fontWeight: 700 }}>約{Math.ceil((summary.end - summary.start) / (7 * 86400000))}週間</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 右パネル: タイムライン */}
+        <div ref={timelineRef} style={{ flex: 1, overflow: "auto", background: "#fff" }}>
+          <div style={{ minWidth: days.length * DAY_W, position: "relative" }}>
+            {/* 月ヘッダー */}
+            <div style={{ display: "flex", height: 28, borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, background: "#fff", zIndex: 5 }}>
+              {months.map((m, i) => (
+                <div key={i} style={{
+                  width: m.count * DAY_W, borderRight: "1px solid #e2e8f0",
+                  display: "flex", alignItems: "center", paddingLeft: 8,
+                  fontSize: 12, fontWeight: 700, color: "#1e1b4b",
+                }}>
+                  {m.year}年{m.month}月
+                </div>
+              ))}
+            </div>
+
+            {/* 日付ヘッダー */}
+            <div style={{ display: "flex", height: HEADER_H - 28, borderBottom: "1px solid #e2e8f0", position: "sticky", top: 28, background: "#fff", zIndex: 5 }}>
+              {days.map((day, i) => {
+                const dow = day.getDay();
+                const isWeekend = dow === 0 || dow === 6;
+                const isToday = day.toDateString() === today.toDateString();
+                return (
+                  <div key={i} style={{
+                    width: DAY_W, textAlign: "center", flexShrink: 0, borderRight: "1px solid #f1f5f9",
+                    background: isToday ? "#eef2ff" : isWeekend ? "#f8f7f4" : "#fff",
+                    display: "flex", flexDirection: "column", justifyContent: "center", gap: 1,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#1e1b4b" }}>
+                      {day.getDate()}
+                    </div>
+                    <div style={{ fontSize: 9, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#94a3b8", fontWeight: 600 }}>
+                      {WEEKDAYS[dow]}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* マイルストーン行（今日マーカー） */}
+            <div style={{ display: "flex", height: 20, borderBottom: "1px solid #e2e8f0" }}>
+              {days.map((day, i) => {
+                const isToday = day.toDateString() === today.toDateString();
+                const dow = day.getDay();
+                const isWeekend = dow === 0 || dow === 6;
+                return (
+                  <div key={i} style={{ width: DAY_W, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isWeekend ? "#f8f7f4" : "#fff", borderRight: "1px solid #f1f5f9" }}>
+                    {isToday && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* タスクバー行 */}
+            {allCases.map((c) => {
+              const cwd = casesWithDates.find((cw) => cw.id === c.id);
+              const bar = cwd ? getBarStyle(cwd) : null;
+              const st = STATUSES.find((s) => s.id === c.status);
+              return (
+                <div key={c.id} style={{ height: ROW_H, position: "relative", borderBottom: "1px solid #f1f5f9" }}>
+                  {/* 背景の週末ハイライト */}
+                  <div style={{ display: "flex", position: "absolute", inset: 0 }}>
+                    {days.map((day, i) => {
+                      const dow = day.getDay();
+                      const isWeekend = dow === 0 || dow === 6;
+                      return (
+                        <div key={i} style={{ width: DAY_W, flexShrink: 0, background: isWeekend ? "#f8f7f4" : "transparent", borderRight: "1px solid #f1f5f900" }} />
+                      );
+                    })}
+                  </div>
+                  {/* バー */}
+                  {bar && (
+                    <div onClick={() => onSelect(c.id)} style={{
+                      position: "absolute", top: 12, left: bar.left + 2, width: bar.width,
+                      height: ROW_H - 24, borderRadius: 6, cursor: "pointer",
+                      background: `linear-gradient(135deg, ${bar.bg}, ${bar.bg}88)`,
+                      display: "flex", alignItems: "center", paddingLeft: 10,
+                      fontSize: 12, fontWeight: 600, color: "#fff",
+                      boxShadow: selectedId === c.id ? `0 0 0 2px ${bar.color}` : "none",
+                      overflow: "hidden", whiteSpace: "nowrap",
+                      transition: "box-shadow 0.15s",
+                    }}>
+                      {c.name}
+                    </div>
+                  )}
+                  {/* 日付なしの案件 */}
+                  {!bar && (
+                    <div style={{ position: "absolute", top: 16, left: 8, fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>
+                      期限未設定
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 今日の縦線 */}
+            {todayIdx >= 0 && todayIdx < days.length && (
+              <div style={{
+                position: "absolute", top: 0, left: todayIdx * DAY_W + DAY_W / 2,
+                width: 2, height: "100%", background: "#6366f188", zIndex: 3, pointerEvents: "none",
+              }} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CaseCard({ c, onClick, isSelected, onStatusChange }) {
   const done = c.tasks.filter((t) => t.done).length;
   const total = c.tasks.length;
@@ -658,6 +931,12 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
             </button>
           ))}
         </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>開始日</label>
+        <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
+          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: 12, color: "#1e1b4b", outline: "none" }} />
       </div>
 
       <div style={{ marginBottom: 14 }}>
