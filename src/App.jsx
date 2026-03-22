@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { auth, googleProvider, db } from "./firebase";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 const STATUSES = [
@@ -76,9 +76,13 @@ export default function App() {
     return unsub;
   }, []);
 
-  async function handleLogin() {
-    try { await signInWithPopup(auth, googleProvider); }
-    catch (e) { if (e.code !== "auth/popup-closed-by-user") alert("ログインに失敗しました: " + e.message); }
+  // リダイレクト結果を処理
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
+
+  function handleLogin() {
+    signInWithRedirect(auth, googleProvider);
   }
   async function handleLogout() {
     await signOut(auth);
