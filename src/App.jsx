@@ -3,9 +3,13 @@ import { auth, googleProvider, db } from "./firebase";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
+const FONT_HEADING = "'Shippori Mincho B1', 'Hiragino Mincho ProN', serif";
+const FONT_BODY = "'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
+const FONT_MONO = "'JetBrains Mono', 'SF Mono', monospace";
+
 const STATUSES = [
   { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
-  { id: "creating", label: "書類作成", color: "#d97706", bg: "#fffbeb", dot: "#fbbf24" },
+  { id: "creating", label: "書類作成", color: "#c2820a", bg: "#fef9ee", dot: "#e9a832" },
   { id: "pending",  label: "承認待ち", color: "#0891b2", bg: "#ecfeff", dot: "#22d3ee" },
   { id: "done",     label: "完了",    color: "#059669", bg: "#ecfdf5", dot: "#34d399" },
 ];
@@ -51,7 +55,7 @@ function DeadlineBadge({ date }) {
   else if (d === 0) { color = "#dc2626"; bg = "#fef2f2"; text = "本日締切"; }
   else if (d <= 3)  { color = "#d97706"; bg = "#fffbeb"; }
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, color, background: bg, borderRadius: 6, padding: "2px 7px", border: `1px solid ${color}22` }}>
+    <span style={{ fontSize: 11, fontWeight: 600, color, background: bg, borderRadius: 6, padding: "2px 7px", border: `1px solid ${color}22`, fontFamily: FONT_MONO }}>
       {text}
     </span>
   );
@@ -352,20 +356,20 @@ export default function App() {
   // ログイン画面
   if (authLoading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
         <div style={{ textAlign: "center", color: "#64748b" }}>読み込み中…</div>
       </div>
     );
   }
   if (!user) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: "40px 36px", boxShadow: "0 4px 24px #00000012", textAlign: "center", maxWidth: 380 }}>
-          <div style={{ width: 56, height: 56, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>📋</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px" }}>案件管理</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px" }}>複数デバイスでタスクを同期管理</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
+        <div style={{ background: "#fff", borderRadius: 18, padding: "44px 40px", boxShadow: "0 8px 32px #0000000f, 0 2px 8px #0000000a", textAlign: "center", maxWidth: 380, border: "1px solid #f0ede8" }}>
+          <div style={{ width: 60, height: 60, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 18px", boxShadow: "0 4px 12px #6366f133" }}>📋</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px", fontFamily: FONT_HEADING }}>案件管理</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px", letterSpacing: "0.04em" }}>複数デバイスでタスクを同期管理</p>
           <button onClick={handleLogin}
-            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 1px 4px #00000010" }}>
+            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 28px", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 2px 8px #0000000c", transition: "box-shadow 0.2s, border-color 0.2s", fontFamily: FONT_BODY }}>
             <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.35 2.56 10.51l7.97-5.92z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.92C6.51 42.62 14.62 48 24 48z"/></svg>
             Googleでログイン
           </button>
@@ -375,7 +379,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f7f4", fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#faf9f6", fontFamily: FONT_BODY }}>
       <InjectMobileCSS />
       {isOffline && (
         <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
@@ -383,10 +387,10 @@ export default function App() {
         </div>
       )}
       {/* Header */}
-      <div className="app-header" style={{ background: "#1e1b4b", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 12px #1e1b4b44", flexWrap: "wrap", gap: 8 }}>
+      <div className="app-header" style={{ background: "linear-gradient(135deg, #1e1b4b, #2d2a5e)", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 16px #1e1b4b55", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
-          <span className="app-title" style={{ fontWeight: 700, fontSize: 16 }}>案件管理</span>
+          <span className="app-title" style={{ fontWeight: 700, fontSize: 16, fontFamily: FONT_HEADING, letterSpacing: "0.05em" }}>案件管理</span>
           {urgentCount > 0 && (
             <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>⚠ {urgentCount}件</span>
           )}
@@ -427,7 +431,7 @@ export default function App() {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+      <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #eee8e0", flexWrap: "wrap" }}>
         <input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -498,7 +502,7 @@ export default function App() {
                     {copiedId === t.body ? "✓ コピー済" : "📋 コピー"}
                   </button>
                 </div>
-                <pre style={{ fontSize: 11, color: "#64748b", whiteSpace: "pre-wrap", background: "#f8f7f4", borderRadius: 6, padding: 8, maxHeight: 100, overflow: "auto", margin: 0 }}>
+                <pre style={{ fontSize: 11, color: "#64748b", whiteSpace: "pre-wrap", background: "#faf9f6", borderRadius: 6, padding: 8, maxHeight: 100, overflow: "auto", margin: 0 }}>
                   {t.body.slice(0, 180)}…
                 </pre>
               </div>
@@ -541,7 +545,7 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
               background: isOver ? s.bg : "transparent", border: isOver ? `2px dashed ${s.color}44` : "2px dashed transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
               <div style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot }} />
-              <span style={{ fontWeight: 700, color: s.color, fontSize: 12 }}>{s.label}</span>
+              <span style={{ fontWeight: 700, color: s.color, fontSize: 12, fontFamily: FONT_HEADING, letterSpacing: "0.03em" }}>{s.label}</span>
               <span style={{ background: s.bg, color: s.color, borderRadius: 10, padding: "0 6px", fontSize: 11, fontWeight: 700 }}>{cols.length}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -579,7 +583,7 @@ function ListView({ cases, onSelect, selectedId }) {
             return (
               <tr key={c.id} onClick={() => onSelect(c.id)}
                 style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: selectedId === c.id ? "#eef2ff" : "transparent" }}>
-                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: 13 }}>{c.name}</td>
+                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: 13, fontFamily: FONT_HEADING }}>{c.name}</td>
                 <td style={{ padding: "10px" }}>
                   <span style={{ background: st?.bg, color: st?.color, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>{st?.label}</span>
                 </td>
@@ -799,7 +803,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                   )}
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: st?.dot || "#cbd5e1", flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelect(c.id)}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT_HEADING }}>{c.name}</div>
                   </div>
                   <div style={{ width: 40, textAlign: "center", fontSize: 12, color: "#64748b", fontWeight: 600 }}>
                     {duration ? `${duration}日` : "—"}
@@ -833,8 +837,8 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
           )}
 
           {summary && (
-            <div style={{ margin: 12, padding: 14, background: "#f8f7f4", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ margin: 12, padding: 14, background: "#faf9f6", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_HEADING }}>
                 スケジュール概要 <span style={{ color: "#94a3b8", fontSize: 10 }}>▼</span>
               </div>
               <div style={{ fontSize: 12, color: "#1e1b4b", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
@@ -879,7 +883,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                     background: isToday ? "#eef2ff" : isWeekend ? "#f8f7f4" : "#fff",
                     display: "flex", flexDirection: "column", justifyContent: "center", gap: 1,
                   }}>
-                    <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#1e1b4b" }}>
+                    <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#1e1b4b", fontFamily: FONT_MONO }}>
                       {day.getDate()}
                     </div>
                     <div style={{ fontSize: 9, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#94a3b8", fontWeight: 600 }}>
@@ -988,9 +992,10 @@ function CaseCard({ c, onClick, isSelected, onStatusChange }) {
       onClick={onClick} style={{
       background: "#fff", borderRadius: 12, padding: "11px 13px", cursor: "grab",
       border: isSelected ? "2px solid #6366f1" : "2px solid transparent",
-      boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 4px #00000010",
+      boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 6px #0000000a, 0 1px 2px #0000000a",
+      transition: "box-shadow 0.2s, border-color 0.2s",
     }}>
-      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: 13, marginBottom: 5 }}>{c.name}</div>
+      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: 13, marginBottom: 5, fontFamily: FONT_HEADING }}>{c.name}</div>
       {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} /></div>}
       {total > 0 && (
         <div style={{ marginBottom: 7 }}>
@@ -1024,14 +1029,14 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
   return (
-    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0 }}>
+    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0, fontFamily: FONT_BODY }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
             onBlur={() => { onUpdate({ name: nameVal }); setEditName(false); }} autoFocus
             style={{ fontSize: 14, fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
         ) : (
-          <div style={{ fontWeight: 700, fontSize: 14, color: "#1e1b4b", cursor: "pointer", flex: 1 }} onClick={() => setEditName(true)}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#1e1b4b", cursor: "pointer", flex: 1, fontFamily: FONT_HEADING }} onClick={() => setEditName(true)}>
             {c.name} <span style={{ fontSize: 10, color: "#94a3b8" }}>✏</span>
           </div>
         )}
@@ -1093,7 +1098,7 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
         <div style={{ marginBottom: 6, display: "flex", flexWrap: "wrap", gap: 3 }}>
           {TASK_TEMPLATES.map((tl) => (
             <button key={tl} onClick={() => onAddTask(tl)}
-              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#f8f7f4", color: "#64748b", cursor: "pointer" }}>
+              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#faf9f6", color: "#64748b", cursor: "pointer" }}>
               + {tl}
             </button>
           ))}
@@ -1161,7 +1166,7 @@ function NewCaseModal({ onAdd, onClose }) {
           <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inputStyle} />
         </div>
         <button onClick={submit}
-          style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
+          style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4, fontFamily: FONT_HEADING, letterSpacing: "0.05em", boxShadow: "0 2px 8px #6366f133" }}>
           作成する
         </button>
       </div>
@@ -1173,9 +1178,9 @@ function Modal({ onClose, title, children }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#00000050", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
       onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 14, padding: 22, width: 440, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px #00000030" }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 440, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px #00000025, 0 4px 16px #0000000f", fontFamily: FONT_BODY }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "#1e1b4b" }}>{title}</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: "#1e1b4b", fontFamily: FONT_HEADING }}>{title}</span>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>×</button>
         </div>
         {children}
@@ -1217,8 +1222,8 @@ function InjectMobileCSS() {
   return null;
 }
 
-const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" };
-const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 11px", fontSize: 13, outline: "none", boxSizing: "border-box", color: "#1e1b4b" };
+const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY };
+const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" };
 function btnStyle(bg, color) {
-  return { background: bg, color, border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" };
+  return { background: bg, color, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT_BODY, transition: "opacity 0.15s" };
 }
