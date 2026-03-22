@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { auth, googleProvider, db } from "./firebase";
-import { onAuthStateChanged, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 const STATUSES = [
@@ -76,13 +76,10 @@ export default function App() {
     return unsub;
   }, []);
 
-  // リダイレクト結果を処理
-  useEffect(() => {
-    getRedirectResult(auth).catch(() => {});
-  }, []);
-
   function handleLogin() {
-    signInWithRedirect(auth, googleProvider);
+    signInWithPopup(auth, googleProvider).catch((err) => {
+      console.error("Login failed:", err);
+    });
   }
   async function handleLogout() {
     await signOut(auth);
@@ -764,7 +761,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
         {days.map((day, i) => {
           const dow = day.getDay();
           return (
-            <div key={i} style={{ width: DAY_W, flexShrink: 0, height, background: (dow === 0 || dow === 6) ? "#f8f7f4" : "transparent" }} />
+            <div key={i} style={{ width: DAY_W, flexShrink: 0, height, background: (dow === 0 || dow === 6) ? "#f8f7f4" : "transparent", borderRight: "1px solid transparent" }} />
           );
         })}
       </div>
