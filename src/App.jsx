@@ -7,6 +7,14 @@ const FONT_HEADING = "'Shippori Mincho B1', 'Hiragino Mincho ProN', serif";
 const FONT_BODY = "'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
 const FONT_MONO = "'JetBrains Mono', 'SF Mono', monospace";
 
+const FONT_SCALES = [
+  { label: "小", value: 1.0 },
+  { label: "中", value: 1.15 },
+  { label: "大", value: 1.3 },
+];
+
+function sz(base, scale) { return Math.round(base * scale); }
+
 const STATUSES = [
   { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
   { id: "creating", label: "書類作成", color: "#c2820a", bg: "#fef9ee", dot: "#e9a832" },
@@ -47,15 +55,16 @@ function daysUntil(dateStr) {
   return Math.ceil(diff / 86400000);
 }
 
-function DeadlineBadge({ date }) {
+function DeadlineBadge({ date, fs: fsProp }) {
   if (!date) return null;
+  const f = fsProp || ((v) => v);
   const d = daysUntil(date);
   let color = "#64748b", bg = "#f1f5f9", text = `${d}日後`;
   if (d < 0)      { color = "#dc2626"; bg = "#fef2f2"; text = `${Math.abs(d)}日超過`; }
   else if (d === 0) { color = "#dc2626"; bg = "#fef2f2"; text = "本日締切"; }
   else if (d <= 3)  { color = "#d97706"; bg = "#fffbeb"; }
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, color, background: bg, borderRadius: 6, padding: "2px 7px", border: `1px solid ${color}22`, fontFamily: FONT_MONO }}>
+    <span style={{ fontSize: f(12), fontWeight: 600, color, background: bg, borderRadius: 6, padding: "2px 7px", border: `1px solid ${color}22`, fontFamily: FONT_MONO }}>
       {text}
     </span>
   );
@@ -73,6 +82,18 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [sortKey, setSortKey] = useState("deadline");
+  const [fontScale, setFontScale] = useState(() => {
+    try { return parseFloat(localStorage.getItem("fontScale")) || 1.15; } catch { return 1.15; }
+  });
+  const fs = useCallback((base) => Math.round(base * fontScale), [fontScale]);
+  function cycleFontScale() {
+    setFontScale((prev) => {
+      const idx = FONT_SCALES.findIndex((s) => s.value === prev);
+      const next = FONT_SCALES[(idx + 1) % FONT_SCALES.length].value;
+      try { localStorage.setItem("fontScale", String(next)); } catch {}
+      return next;
+    });
+  }
 
   // Firebase Auth 監視
   useEffect(() => {
@@ -357,7 +378,7 @@ export default function App() {
   if (authLoading) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
-        <div style={{ textAlign: "center", color: "#64748b" }}>読み込み中…</div>
+        <div style={{ textAlign: "center", color: "#64748b", fontSize: fs(14) }}>読み込み中…</div>
       </div>
     );
   }
@@ -366,10 +387,10 @@ export default function App() {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
         <div style={{ background: "#fff", borderRadius: 18, padding: "44px 40px", boxShadow: "0 8px 32px #0000000f, 0 2px 8px #0000000a", textAlign: "center", maxWidth: 380, border: "1px solid #f0ede8" }}>
           <div style={{ width: 60, height: 60, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 18px", boxShadow: "0 4px 12px #6366f133" }}>📋</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px", fontFamily: FONT_HEADING }}>案件管理</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px", letterSpacing: "0.04em" }}>複数デバイスでタスクを同期管理</p>
+          <h1 style={{ fontSize: fs(22), fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px", fontFamily: FONT_HEADING }}>案件管理</h1>
+          <p style={{ fontSize: fs(14), color: "#64748b", margin: "0 0 24px", letterSpacing: "0.04em" }}>複数デバイスでタスクを同期管理</p>
           <button onClick={handleLogin}
-            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 28px", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 2px 8px #0000000c", transition: "box-shadow 0.2s, border-color 0.2s", fontFamily: FONT_BODY }}>
+            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 28px", fontSize: fs(14), fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 2px 8px #0000000c", transition: "box-shadow 0.2s, border-color 0.2s", fontFamily: FONT_BODY }}>
             <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.35 2.56 10.51l7.97-5.92z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.92C6.51 42.62 14.62 48 24 48z"/></svg>
             Googleでログイン
           </button>
@@ -382,7 +403,7 @@ export default function App() {
     <div style={{ minHeight: "100vh", background: "#faf9f6", fontFamily: FONT_BODY }}>
       <InjectMobileCSS />
       {isOffline && (
-        <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
+        <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: fs(12), fontWeight: 700 }}>
           オフラインモード — データはローカルに保存されます
         </div>
       )}
@@ -390,9 +411,9 @@ export default function App() {
       <div className="app-header" style={{ background: "linear-gradient(135deg, #1e1b4b, #2d2a5e)", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 16px #1e1b4b55", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
-          <span className="app-title" style={{ fontWeight: 700, fontSize: 16, fontFamily: FONT_HEADING, letterSpacing: "0.05em" }}>案件管理</span>
+          <span className="app-title" style={{ fontWeight: 700, fontSize: fs(16), fontFamily: FONT_HEADING, letterSpacing: "0.05em" }}>案件管理</span>
           {urgentCount > 0 && (
-            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>⚠ {urgentCount}件</span>
+            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: fs(11), fontWeight: 700 }}>⚠ {urgentCount}件</span>
           )}
         </div>
         <div className="app-header-buttons" style={{ display: "flex", gap: 6 }}>
@@ -403,14 +424,17 @@ export default function App() {
           )}
           <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
           <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
+          <button onClick={cycleFontScale} title="文字サイズ変更" style={btnStyle("#312e81", "#a5b4fc")}>
+            文字{FONT_SCALES.find((s) => s.value === fontScale)?.label || "中"}
+          </button>
           <div style={{ position: "relative" }}>
             <button onClick={() => setShowDataMenu((v) => !v)} style={btnStyle("#312e81", "#a5b4fc")}>💾 データ</button>
             {showDataMenu && (
               <div style={{ position: "absolute", top: "110%", right: 0, background: "#fff", borderRadius: 10, boxShadow: "0 4px 20px #00000020", padding: 6, zIndex: 50, minWidth: 140 }}>
-                <button onClick={exportData} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 12, cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
+                <button onClick={exportData} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: fs(13), cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
                   📥 エクスポート
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: 12, cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
+                <button onClick={() => fileInputRef.current?.click()} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: fs(13), cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
                   📤 インポート
                 </button>
                 <input ref={fileInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
@@ -436,47 +460,48 @@ export default function App() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="🔍 案件名で検索…"
-          style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: 13, outline: "none", color: "#1e1b4b" }}
+          style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: fs(13), outline: "none", color: "#1e1b4b" }}
         />
         <div className="filter-buttons" style={{ display: "flex", gap: 4 }}>
           <button onClick={() => setFilterStatus("all")}
-            style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
+            style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
               background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
             すべて
           </button>
           {STATUSES.map((s) => (
             <button key={s.id} onClick={() => setFilterStatus(s.id)}
-              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
+              style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
                 background: filterStatus === s.id ? s.bg : "#f1f5f9", color: filterStatus === s.id ? s.color : "#94a3b8" }}>
               {s.label}
             </button>
           ))}
         </div>
         <select value={sortKey} onChange={(e) => setSortKey(e.target.value)}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 8px", fontSize: 12, color: "#1e1b4b", outline: "none", background: "#fff" }}>
+          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 8px", fontSize: fs(13), color: "#1e1b4b", outline: "none", background: "#fff" }}>
           <option value="deadline">期限順</option>
           <option value="name">名前順</option>
           <option value="created">作成日（古い順）</option>
           <option value="created_desc">作成日（新しい順）</option>
         </select>
         {(searchQuery || filterStatus !== "all") && (
-          <span style={{ fontSize: 11, color: "#64748b" }}>{filteredCases.length}件</span>
+          <span style={{ fontSize: fs(12), color: "#64748b" }}>{filteredCases.length}件</span>
         )}
       </div>
 
       <div className="main-content" style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
         <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
           {view === "kanban" ? (
-            <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
+            <KanbanView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
           ) : view === "list" ? (
-            <ListView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
+            <ListView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} />
           ) : (
-            <GanttView cases={filteredCases} onSelect={setSelected} selectedId={selected} onUpdate={updateCase} />
+            <GanttView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} onUpdate={updateCase} />
           )}
         </div>
 
         {selectedCase && (
           <DetailPanel
+            fs={fs}
             c={selectedCase}
             onUpdate={(patch) => updateCase(selectedCase.id, patch)}
             onDelete={() => deleteCase(selectedCase.id)}
@@ -489,7 +514,7 @@ export default function App() {
         )}
       </div>
 
-      {showNew && <NewCaseModal onAdd={addCase} onClose={() => setShowNew(false)} />}
+      {showNew && <NewCaseModal fs={fs} onAdd={addCase} onClose={() => setShowNew(false)} />}
 
       {showTemplate && (
         <Modal onClose={() => setShowTemplate(false)} title="📄 書類テンプレート">
@@ -497,12 +522,12 @@ export default function App() {
             {DOC_TEMPLATES.map((t) => (
               <div key={t.id} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, background: "#fff" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, color: "#1e1b4b" }}>{t.name}</span>
+                  <span style={{ fontWeight: 700, color: "#1e1b4b", fontSize: fs(14) }}>{t.name}</span>
                   <button onClick={() => copyTemplate(t.body)} style={btnStyle(copiedId === t.body ? "#059669" : "#6366f1", "#fff")}>
                     {copiedId === t.body ? "✓ コピー済" : "📋 コピー"}
                   </button>
                 </div>
-                <pre style={{ fontSize: 11, color: "#64748b", whiteSpace: "pre-wrap", background: "#faf9f6", borderRadius: 6, padding: 8, maxHeight: 100, overflow: "auto", margin: 0 }}>
+                <pre style={{ fontSize: fs(12), color: "#64748b", whiteSpace: "pre-wrap", background: "#faf9f6", borderRadius: 6, padding: 8, maxHeight: 100, overflow: "auto", margin: 0 }}>
                   {t.body.slice(0, 180)}…
                 </pre>
               </div>
@@ -514,7 +539,7 @@ export default function App() {
   );
 }
 
-function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
+function KanbanView({ fs, cases, onSelect, selectedId, onStatusChange }) {
   const [dragOverStatus, setDragOverStatus] = useState(null);
 
   function handleDragOver(e, statusId) {
@@ -545,15 +570,15 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
               background: isOver ? s.bg : "transparent", border: isOver ? `2px dashed ${s.color}44` : "2px dashed transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
               <div style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot }} />
-              <span style={{ fontWeight: 700, color: s.color, fontSize: 12, fontFamily: FONT_HEADING, letterSpacing: "0.03em" }}>{s.label}</span>
-              <span style={{ background: s.bg, color: s.color, borderRadius: 10, padding: "0 6px", fontSize: 11, fontWeight: 700 }}>{cols.length}</span>
+              <span style={{ fontWeight: 700, color: s.color, fontSize: fs(13), fontFamily: FONT_HEADING, letterSpacing: "0.03em" }}>{s.label}</span>
+              <span style={{ background: s.bg, color: s.color, borderRadius: 10, padding: "0 6px", fontSize: fs(12), fontWeight: 700 }}>{cols.length}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {cols.map((c) => (
-                <CaseCard key={c.id} c={c} onClick={() => onSelect(c.id)} isSelected={selectedId === c.id} onStatusChange={onStatusChange} />
+                <CaseCard key={c.id} c={c} fs={fs} onClick={() => onSelect(c.id)} isSelected={selectedId === c.id} onStatusChange={onStatusChange} />
               ))}
               {cols.length === 0 && (
-                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: 12, padding: "16px 0" }}>
+                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: fs(12), padding: "16px 0" }}>
                   {isOver ? "ここにドロップ" : "なし"}
                 </div>
               )}
@@ -565,14 +590,14 @@ function KanbanView({ cases, onSelect, selectedId, onStatusChange }) {
   );
 }
 
-function ListView({ cases, onSelect, selectedId }) {
+function ListView({ fs, cases, onSelect, selectedId }) {
   return (
     <div style={{ maxWidth: 800 }}>
       <table className="list-table" style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
             {["案件名", "ステータス", "期限", "タスク"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 11, color: "#64748b", fontWeight: 700 }}>{h}</th>
+              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: fs(12), color: "#64748b", fontWeight: 700 }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -583,17 +608,17 @@ function ListView({ cases, onSelect, selectedId }) {
             return (
               <tr key={c.id} onClick={() => onSelect(c.id)}
                 style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: selectedId === c.id ? "#eef2ff" : "transparent" }}>
-                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: 13, fontFamily: FONT_HEADING }}>{c.name}</td>
+                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: fs(14), fontFamily: FONT_HEADING }}>{c.name}</td>
                 <td style={{ padding: "10px" }}>
-                  <span style={{ background: st?.bg, color: st?.color, borderRadius: 6, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>{st?.label}</span>
+                  <span style={{ background: st?.bg, color: st?.color, borderRadius: 6, padding: "2px 9px", fontSize: fs(12), fontWeight: 700 }}>{st?.label}</span>
                 </td>
-                <td style={{ padding: "10px" }}><DeadlineBadge date={c.deadline} /></td>
-                <td style={{ padding: "10px", fontSize: 12, color: "#64748b" }}>{c.tasks.length > 0 ? `${done}/${c.tasks.length}` : "—"}</td>
+                <td style={{ padding: "10px" }}><DeadlineBadge date={c.deadline} fs={fs} /></td>
+                <td style={{ padding: "10px", fontSize: fs(13), color: "#64748b" }}>{c.tasks.length > 0 ? `${done}/${c.tasks.length}` : "—"}</td>
               </tr>
             );
           })}
           {cases.length === 0 && (
-            <tr><td colSpan={4} style={{ textAlign: "center", color: "#cbd5e1", padding: 40 }}>案件がありません</td></tr>
+            <tr><td colSpan={4} style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: fs(13) }}>案件がありません</td></tr>
           )}
         </tbody>
       </table>
@@ -601,7 +626,7 @@ function ListView({ cases, onSelect, selectedId }) {
   );
 }
 
-function GanttView({ cases, onSelect, selectedId, onUpdate }) {
+function GanttView({ fs, cases, onSelect, selectedId, onUpdate }) {
   const DAY_W = 36;
   const ROW_H = 48;
   const SUB_ROW_H = 40;
@@ -777,7 +802,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* 左パネル */}
         <div ref={leftRef} style={{ width: LEFT_W, flexShrink: 0, borderRight: "2px solid #e2e8f0", background: "#fff", overflow: "auto" }}>
-          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-end", padding: "0 12px 8px", fontSize: 11, fontWeight: 700, color: "#64748b" }}>
+          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-end", padding: "0 12px 8px", fontSize: fs(12), fontWeight: 700, color: "#64748b" }}>
             <span style={{ flex: 1 }}>タスク名</span>
             <span style={{ width: 40, textAlign: "center" }}>日数</span>
           </div>
@@ -803,9 +828,9 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                   )}
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: st?.dot || "#cbd5e1", flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelect(c.id)}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT_HEADING }}>{c.name}</div>
+                    <div style={{ fontSize: fs(13), fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT_HEADING }}>{c.name}</div>
                   </div>
-                  <div style={{ width: 40, textAlign: "center", fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                  <div style={{ width: 40, textAlign: "center", fontSize: fs(12), color: "#64748b", fontWeight: 600 }}>
                     {duration ? `${duration}日` : "—"}
                   </div>
                 </div>
@@ -820,11 +845,11 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: t.done ? "#34d399" : "#cbd5e1", flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: t.done ? "#94a3b8" : "#475569", textDecoration: t.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div style={{ fontSize: fs(11), color: t.done ? "#94a3b8" : "#475569", textDecoration: t.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {t.label}
                     </div>
                   </div>
-                  <div style={{ width: 40, textAlign: "center", fontSize: 11, color: "#94a3b8" }}>
+                  <div style={{ width: 40, textAlign: "center", fontSize: fs(11), color: "#94a3b8" }}>
                     {tDuration ? `${tDuration}日` : "—"}
                   </div>
                 </div>
@@ -833,15 +858,15 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
           })}
 
           {cases.length === 0 && (
-            <div style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: 13 }}>案件がありません</div>
+            <div style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: fs(13) }}>案件がありません</div>
           )}
 
           {summary && (
             <div style={{ margin: 12, padding: 14, background: "#faf9f6", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_HEADING }}>
-                スケジュール概要 <span style={{ color: "#94a3b8", fontSize: 10 }}>▼</span>
+              <div style={{ fontSize: fs(13), fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_HEADING }}>
+                スケジュール概要 <span style={{ color: "#94a3b8", fontSize: fs(10) }}>▼</span>
               </div>
-              <div style={{ fontSize: 12, color: "#1e1b4b", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
+              <div style={{ fontSize: fs(12), color: "#1e1b4b", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
                 <span style={{ color: "#64748b" }}>開始日</span>
                 <span style={{ fontWeight: 700 }}>{summary.start.getFullYear()}年{summary.start.getMonth() + 1}月{summary.start.getDate()}日</span>
                 <span style={{ color: "#64748b" }}>完了日</span>
@@ -923,7 +948,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                         height: ROW_H - 16, borderRadius: 6, cursor: "pointer",
                         background: `linear-gradient(135deg, ${bar.bg}, ${bar.bg}88)`,
                         display: "flex", alignItems: "center", paddingLeft: 10,
-                        fontSize: 12, fontWeight: 600, color: "#fff",
+                        fontSize: fs(12), fontWeight: 600, color: "#fff",
                         boxShadow: selectedId === c.id ? `0 0 0 2px ${bar.color}` : "none",
                         overflow: "hidden", whiteSpace: "nowrap", zIndex: 1,
                       }}>
@@ -931,7 +956,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                       </div>
                     )}
                     {!bar && (
-                      <div style={{ position: "absolute", top: 14, left: 8, fontSize: 11, color: "#94a3b8", fontStyle: "italic", zIndex: 1 }}>
+                      <div style={{ position: "absolute", top: 14, left: 8, fontSize: fs(11), color: "#94a3b8", fontStyle: "italic", zIndex: 1 }}>
                         期限未設定
                       </div>
                     )}
@@ -952,14 +977,14 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
                           ? "repeating-linear-gradient(135deg, #34d399, #34d399 4px, #34d39966 4px, #34d39966 8px)"
                           : `linear-gradient(135deg, ${taskBar.bg}, ${taskBar.bg}88)`,
                         display: "flex", alignItems: "center", paddingLeft: 8,
-                        fontSize: 10, fontWeight: 600, color: "#fff",
+                        fontSize: fs(11), fontWeight: 600, color: "#fff",
                         overflow: "hidden", whiteSpace: "nowrap",
                       }}>
                         {t.label}
                       </div>
                     )}
                     {!taskBar && (
-                      <div style={{ position: "absolute", top: 12, left: 8, fontSize: 10, color: "#cbd5e1", fontStyle: "italic", zIndex: 1 }}>
+                      <div style={{ position: "absolute", top: 12, left: 8, fontSize: fs(11), color: "#cbd5e1", fontStyle: "italic", zIndex: 1 }}>
                         日付未設定
                       </div>
                     )}
@@ -982,7 +1007,7 @@ function GanttView({ cases, onSelect, selectedId, onUpdate }) {
   );
 }
 
-function CaseCard({ c, onClick, isSelected, onStatusChange }) {
+function CaseCard({ c, fs, onClick, isSelected, onStatusChange }) {
   const done = c.tasks.filter((t) => t.done).length;
   const total = c.tasks.length;
   return (
@@ -995,11 +1020,11 @@ function CaseCard({ c, onClick, isSelected, onStatusChange }) {
       boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 6px #0000000a, 0 1px 2px #0000000a",
       transition: "box-shadow 0.2s, border-color 0.2s",
     }}>
-      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: 13, marginBottom: 5, fontFamily: FONT_HEADING }}>{c.name}</div>
-      {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} /></div>}
+      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: fs(14), marginBottom: 5, fontFamily: FONT_HEADING }}>{c.name}</div>
+      {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} fs={fs} /></div>}
       {total > 0 && (
         <div style={{ marginBottom: 7 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: fs(11), color: "#94a3b8", marginBottom: 2 }}>
             <span>タスク</span><span>{done}/{total}</span>
           </div>
           <div style={{ height: 3, background: "#f1f5f9", borderRadius: 4 }}>
@@ -1010,7 +1035,7 @@ function CaseCard({ c, onClick, isSelected, onStatusChange }) {
       <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
         {STATUSES.map((s) => (
           <button key={s.id} onClick={(e) => { e.stopPropagation(); onStatusChange(c.id, s.id); }}
-            style={{ padding: "2px 7px", fontSize: 10, borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 600,
+            style={{ padding: "2px 7px", fontSize: fs(11), borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 600,
               background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8" }}>
             {s.label}
           </button>
@@ -1020,7 +1045,7 @@ function CaseCard({ c, onClick, isSelected, onStatusChange }) {
   );
 }
 
-function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, onUpdateTask, onDeleteTask }) {
+function DetailPanel({ fs, c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, onUpdateTask, onDeleteTask }) {
   const [newTask, setNewTask] = useState("");
   const [editName, setEditName] = useState(false);
   const [nameVal, setNameVal] = useState(c.name);
@@ -1034,21 +1059,21 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
             onBlur={() => { onUpdate({ name: nameVal }); setEditName(false); }} autoFocus
-            style={{ fontSize: 14, fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
+            style={{ fontSize: fs(15), fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
         ) : (
-          <div style={{ fontWeight: 700, fontSize: 14, color: "#1e1b4b", cursor: "pointer", flex: 1, fontFamily: FONT_HEADING }} onClick={() => setEditName(true)}>
-            {c.name} <span style={{ fontSize: 10, color: "#94a3b8" }}>✏</span>
+          <div style={{ fontWeight: 700, fontSize: fs(15), color: "#1e1b4b", cursor: "pointer", flex: 1, fontFamily: FONT_HEADING }} onClick={() => setEditName(true)}>
+            {c.name} <span style={{ fontSize: fs(10), color: "#94a3b8" }}>✏</span>
           </div>
         )}
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", padding: 0, marginLeft: 8 }}>×</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: 0, marginLeft: 8 }}>×</button>
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>ステータス</label>
+        <label style={labelStyleFn(fs)}>ステータス</label>
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
           {STATUSES.map((s) => (
             <button key={s.id} onClick={() => onUpdate({ status: s.id })}
-              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
+              style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
                 background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8",
                 boxShadow: c.status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
               {s.label}
@@ -1058,39 +1083,39 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>開始日</label>
+        <label style={labelStyleFn(fs)}>開始日</label>
         <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: 12, color: "#1e1b4b", outline: "none" }} />
+          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>期限</label>
+        <label style={labelStyleFn(fs)}>期限</label>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input type="date" value={c.deadline || ""} onChange={(e) => onUpdate({ deadline: e.target.value })}
-            style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: 12, color: "#1e1b4b", outline: "none" }} />
-          <DeadlineBadge date={c.deadline} />
+            style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
+          <DeadlineBadge date={c.deadline} fs={fs} />
         </div>
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>タスク ({c.tasks.filter(t=>t.done).length}/{c.tasks.length})</label>
+        <label style={labelStyleFn(fs)}>タスク ({c.tasks.filter(t=>t.done).length}/{c.tasks.length})</label>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 7 }}>
           {c.tasks.map((t) => (
             <div key={t.id} style={{ border: "1px solid #f1f5f9", borderRadius: 8, padding: "6px 8px", background: t.done ? "#f8f7f4" : "#fff" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t.id)}
                   style={{ accentColor: "#6366f1", width: 14, height: 14, cursor: "pointer" }} />
-                <span style={{ flex: 1, fontSize: 12, color: t.done ? "#94a3b8" : "#1e1b4b", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                <button onClick={() => onDeleteTask(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 13, padding: 0 }}>×</button>
+                <span style={{ flex: 1, fontSize: fs(13), color: t.done ? "#94a3b8" : "#1e1b4b", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
+                <button onClick={() => onDeleteTask(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 14, padding: 0 }}>×</button>
               </div>
               <div style={{ display: "flex", gap: 4, marginTop: 4, marginLeft: 20 }}>
                 <input type="date" value={t.startDate || ""} onChange={(e) => onUpdateTask(t.id, { startDate: e.target.value })}
                   title="開始日"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: 10, color: "#64748b", outline: "none", width: 110 }} />
-                <span style={{ fontSize: 10, color: "#cbd5e1", lineHeight: "24px" }}>→</span>
+                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
+                <span style={{ fontSize: fs(11), color: "#cbd5e1", lineHeight: "24px" }}>→</span>
                 <input type="date" value={t.deadline || ""} onChange={(e) => onUpdateTask(t.id, { deadline: e.target.value })}
                   title="期限"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: 10, color: "#64748b", outline: "none", width: 110 }} />
+                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
               </div>
             </div>
           ))}
@@ -1098,7 +1123,7 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
         <div style={{ marginBottom: 6, display: "flex", flexWrap: "wrap", gap: 3 }}>
           {TASK_TEMPLATES.map((tl) => (
             <button key={tl} onClick={() => onAddTask(tl)}
-              style={{ fontSize: 10, padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#faf9f6", color: "#64748b", cursor: "pointer" }}>
+              style={{ fontSize: fs(11), padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#faf9f6", color: "#64748b", cursor: "pointer" }}>
               + {tl}
             </button>
           ))}
@@ -1107,28 +1132,28 @@ function DetailPanel({ c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, 
           <input value={newTask} onChange={(e) => setNewTask(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
             placeholder="タスクを入力… Enter"
-            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: 12, outline: "none" }} />
+            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), outline: "none" }} />
           <button onClick={() => { if (newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
             style={btnStyle("#6366f1", "#fff")}>追加</button>
         </div>
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <label style={labelStyle}>メモ</label>
+        <label style={labelStyleFn(fs)}>メモ</label>
         <textarea value={noteVal} onChange={(e) => setNoteVal(e.target.value)} onBlur={() => onUpdate({ note: noteVal })}
           rows={4} placeholder="案件に関するメモ…"
-          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 9px", fontSize: 12, color: "#1e1b4b", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 9px", fontSize: fs(13), color: "#1e1b4b", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
       </div>
 
       <button onClick={() => { if (window.confirm("この案件を削除しますか？")) onDelete(); }}
-        style={{ background: "#fef2f2", color: "#dc2626", border: "none", borderRadius: 8, padding: "7px", fontSize: 12, fontWeight: 700, cursor: "pointer", width: "100%" }}>
+        style={{ background: "#fef2f2", color: "#dc2626", border: "none", borderRadius: 8, padding: "8px", fontSize: fs(13), fontWeight: 700, cursor: "pointer", width: "100%" }}>
         🗑 この案件を削除
       </button>
     </div>
   );
 }
 
-function NewCaseModal({ onAdd, onClose }) {
+function NewCaseModal({ fs, onAdd, onClose }) {
   const [name, setName]       = useState("");
   const [status, setStatus]   = useState("draft");
   const [deadline, setDeadline] = useState("");
@@ -1143,17 +1168,17 @@ function NewCaseModal({ onAdd, onClose }) {
     <Modal onClose={onClose} title="＋ 新規案件">
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label style={labelStyle}>案件名 *</label>
+          <label style={labelStyleFn(fs)}>案件名 *</label>
           <input value={name} onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
-            placeholder="例：〇〇事業補助金申請" style={inputStyle} />
+            placeholder="例：〇〇事業補助金申請" style={inputStyleFn(fs)} />
         </div>
         <div>
-          <label style={labelStyle}>初期ステータス</label>
+          <label style={labelStyleFn(fs)}>初期ステータス</label>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
             {STATUSES.map((s) => (
               <button key={s.id} onClick={() => setStatus(s.id)}
-                style={{ padding: "4px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12,
+                style={{ padding: "4px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700, fontSize: fs(13),
                   background: status === s.id ? s.bg : "#f1f5f9", color: status === s.id ? s.color : "#94a3b8",
                   boxShadow: status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
                 {s.label}
@@ -1162,11 +1187,11 @@ function NewCaseModal({ onAdd, onClose }) {
           </div>
         </div>
         <div>
-          <label style={labelStyle}>期限（任意）</label>
-          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inputStyle} />
+          <label style={labelStyleFn(fs)}>期限（任意）</label>
+          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inputStyleFn(fs)} />
         </div>
         <button onClick={submit}
-          style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4, fontFamily: FONT_HEADING, letterSpacing: "0.05em", boxShadow: "0 2px 8px #6366f133" }}>
+          style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: fs(15), fontWeight: 700, cursor: "pointer", marginTop: 4, fontFamily: FONT_HEADING, letterSpacing: "0.05em", boxShadow: "0 2px 8px #6366f133" }}>
           作成する
         </button>
       </div>
@@ -1222,8 +1247,10 @@ function InjectMobileCSS() {
   return null;
 }
 
-const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY };
-const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" };
+function labelStyleFn(fs) { return { display: "block", fontSize: fs(11), fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY }; }
+const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY };
+function inputStyleFn(fs) { return { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: fs(14), outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" }; }
+const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 14, outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" };
 function btnStyle(bg, color) {
-  return { background: bg, color, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT_BODY, transition: "opacity 0.15s" };
+  return { background: bg, color, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT_BODY, transition: "opacity 0.15s" };
 }
