@@ -18,19 +18,16 @@ body { margin: 0; font-family: var(--font-body); background: var(--c-bg); color:
 
 /* ── Mobile responsive ── */
 @media (max-width: 768px) {
-  .app-header { height: auto !important; padding: 8px 12px !important; }
-  .app-header-buttons { gap: 4px !important; }
-  .app-header-buttons button { padding: 5px 8px !important; font-size: 11px !important; }
-  .search-bar { padding: 8px 12px !important; gap: 6px !important; }
-  .search-bar input { min-width: 100px !important; font-size: 12px !important; }
-  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .filter-buttons button { white-space: nowrap; font-size: 10px !important; padding: 3px 7px !important; }
+  .search-bar { padding: 8px 10px !important; gap: 6px !important; }
+  .search-bar input { min-width: 80px !important; font-size: 13px !important; }
+  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; }
+  .filter-buttons button { white-space: nowrap; font-size: 11px !important; padding: 4px 8px !important; }
   .main-content { flex-direction: column !important; }
   .kanban-grid { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; gap: 12px !important; padding-bottom: 8px; scroll-snap-type: x mandatory; }
   .kanban-column { min-width: 220px !important; flex-shrink: 0 !important; scroll-snap-align: start; }
   .detail-panel { width: 100% !important; border-left: none !important; border-top: 1px solid var(--c-border); max-height: 50vh; position: relative !important; }
-  .list-table { font-size: 11px !important; }
-  .list-table td, .list-table th { padding: 6px 5px !important; }
+  .list-table { font-size: 12px !important; }
+  .list-table td, .list-table th { padding: 8px 6px !important; }
   .gantt-wrapper { flex-direction: column !important; }
   .gantt-left { width: 100% !important; max-height: 180px !important; border-right: none !important; border-bottom: 2px solid var(--c-border); }
   .gantt-timeline { -webkit-overflow-scrolling: touch; }
@@ -38,5 +35,4 @@ body { margin: 0; font-family: var(--font-body); background: var(--c-bg); color:
 
 @media (max-width: 480px) {
   .kanban-column { min-width: 180px !important; }
-  .app-title { font-size: 14px !important; }
 }
