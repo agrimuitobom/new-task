@@ -84,7 +84,17 @@ function AppShell({ user, onLogout }) {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [notifyEnabled, setNotifyEnabled] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
   const [showDataMenu, setShowDataMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const fileInputRef = useRef(null);
+  const moreMenuRef = useRef(null);
+
+  // Close more menu on outside click
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handleClick = (e) => { if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false); };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [showMoreMenu]);
 
   useEffect(() => {
     const goOff = () => setIsOffline(true);
@@ -181,41 +191,43 @@ function AppShell({ user, onLogout }) {
       {isOffline && <div className={s.offlineBanner} style={{ fontSize: fs(12) }}>オフラインモード — データはローカルに保存されます</div>}
 
       {/* ── Header ── */}
-      <div className={`${s.header} app-header`}>
+      <div className={s.header}>
         <div className={s.headerLeft}>
           <div className={s.headerIcon}>📋</div>
-          <span className={`${s.headerTitle} app-title`} style={{ fontSize: fs(16) }}>案件管理</span>
+          <span className={s.headerTitle} style={{ fontSize: fs(16) }}>案件管理</span>
           {urgentCount > 0 && <span className={s.urgentBadge} style={{ fontSize: fs(11) }}>⚠ {urgentCount}件</span>}
         </div>
-        <div className="app-header-buttons" style={{ display: "flex", gap: 6 }}>
-          {notifyEnabled
-            ? <button onClick={() => checkAndNotify(cases)} title="通知チェック" style={btnSm}>🔔</button>
-            : <button onClick={requestNotification} title="通知を有効にする" style={{ ...btnSm, color: "#64748b" }}>🔕</button>}
-          <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnSm}>↩</button>
-          <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnSm}>↪</button>
-          <button onClick={cycleFontScale} title="文字サイズ変更"
-            style={{ ...btnSm, background: "#4f46e5", color: "#fff", border: "1px solid #818cf8", minWidth: 50 }}>
-            Aa {FONT_SCALES.find((sc) => sc.value === fontScale)?.label || "中"}
-          </button>
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowDataMenu((v) => !v)} style={btnSm}>💾 データ</button>
-            {showDataMenu && (
-              <div className={s.dataMenu}>
-                <button onClick={exportData} className={s.dataMenuItem} style={{ fontSize: fs(13) }}>📥 エクスポート</button>
-                <button onClick={() => fileInputRef.current?.click()} className={s.dataMenuItem} style={{ fontSize: fs(13) }}>📤 インポート</button>
-                <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: "none" }} />
-              </div>
-            )}
-          </div>
-          <button onClick={() => setShowTemplate(true)} style={{ ...btnSm, background: "#3730a3", color: "#fff" }}>📄 テンプレ</button>
-          <button onClick={() => { setShowNew(true); setSelected(null); }} style={{ ...btnSm, background: "#6366f1", color: "#fff" }}>＋ 新規</button>
-          <button onClick={cycleView} style={btnSm}>
+        <div className={s.headerButtons}>
+          <button onClick={() => { setShowNew(true); setSelected(null); }} className={s.btnPrimary} style={{ fontSize: fs(12) }}>＋ 新規</button>
+          <button onClick={cycleView} className={s.btnGhost} style={{ fontSize: fs(12) }}>
             {view === "kanban" ? "≡ リスト" : view === "list" ? "📊 ガント" : "⊞ カンバン"}
           </button>
-          <div className={s.userInfo}>
-            {user.photoURL && <img src={user.photoURL} alt="" className={s.userAvatar} referrerPolicy="no-referrer" />}
-            <span className={s.userName}>{user.displayName?.split(" ")[0]}</span>
-            <button onClick={onLogout} title="ログアウト" style={{ ...btnSm, color: "#94a3b8" }}>↗</button>
+          <div ref={moreMenuRef} style={{ position: "relative" }}>
+            <button onClick={() => setShowMoreMenu((v) => !v)} className={s.btnGhost} style={{ fontSize: 16, padding: "4px 8px" }}>···</button>
+            {showMoreMenu && (
+              <div className={s.moreMenu}>
+                <button onClick={() => { undo(); setShowMoreMenu(false); }} className={s.moreMenuItem}>↩ 元に戻す</button>
+                <button onClick={() => { redo(); setShowMoreMenu(false); }} className={s.moreMenuItem}>↪ やり直す</button>
+                <div className={s.moreMenuDivider} />
+                <button onClick={() => { cycleFontScale(); setShowMoreMenu(false); }} className={s.moreMenuItem}>
+                  Aa 文字サイズ（{FONT_SCALES.find((sc) => sc.value === fontScale)?.label || "中"}）
+                </button>
+                {notifyEnabled
+                  ? <button onClick={() => { checkAndNotify(cases); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔔 通知チェック</button>
+                  : <button onClick={() => { requestNotification(); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔕 通知を有効にする</button>}
+                <div className={s.moreMenuDivider} />
+                <button onClick={() => { setShowTemplate(true); setShowMoreMenu(false); }} className={s.moreMenuItem}>📄 テンプレート</button>
+                <button onClick={() => { exportData(); setShowMoreMenu(false); }} className={s.moreMenuItem}>📥 エクスポート</button>
+                <button onClick={() => { fileInputRef.current?.click(); setShowMoreMenu(false); }} className={s.moreMenuItem}>📤 インポート</button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: "none" }} />
+                <div className={s.moreMenuDivider} />
+                <div className={s.moreMenuUser}>
+                  {user.photoURL && <img src={user.photoURL} alt="" className={s.userAvatar} referrerPolicy="no-referrer" />}
+                  <span style={{ flex: 1, fontSize: 12, color: "#64748b" }}>{user.displayName?.split(" ")[0]}</span>
+                  <button onClick={onLogout} className={s.moreMenuLogout}>ログアウト</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
