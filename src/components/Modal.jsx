@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { STATUSES } from "../constants";
+import { STATUSES, DEFAULT_TAGS } from "../constants";
 import { useUI } from "../store/UIContext";
 import s from "./Modal.module.css";
 
@@ -22,10 +22,15 @@ export function NewCaseModal({ onAdd, onClose }) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
   const [deadline, setDeadline] = useState("");
+  const [tags, setTags] = useState([]);
+
+  function toggleTag(tag) {
+    setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
+  }
 
   function submit() {
     if (!name.trim()) return;
-    onAdd({ name: name.trim(), status, deadline });
+    onAdd({ name: name.trim(), status, deadline, tags });
     onClose();
   }
 
@@ -56,6 +61,20 @@ export function NewCaseModal({ onAdd, onClose }) {
           <label className={s.inputLabel} style={{ fontSize: fs(11) }}>期限（任意）</label>
           <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
             className={s.textInput} style={{ fontSize: fs(14) }} />
+        </div>
+        <div>
+          <label className={s.inputLabel} style={{ fontSize: fs(11) }}>タグ（任意）</label>
+          <div className={s.tagOptions}>
+            {DEFAULT_TAGS.map((tag) => (
+              <button key={tag} type="button" onClick={() => toggleTag(tag)} className={s.tagOption}
+                style={{ fontSize: fs(11),
+                  background: tags.includes(tag) ? "#eef2ff" : "#f1f5f9",
+                  color: tags.includes(tag) ? "#6366f1" : "#94a3b8",
+                  borderColor: tags.includes(tag) ? "#6366f1" : "transparent" }}>
+                {tag}
+              </button>
+            ))}
+          </div>
         </div>
         <button onClick={submit} className={s.submitBtn} style={{ fontSize: fs(15) }}>
           作成する

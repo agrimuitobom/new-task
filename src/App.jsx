@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { auth, googleProvider } from "./firebase";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 
-import { FONT_SCALES, STATUSES, DOC_TEMPLATES, daysUntil } from "./constants";
+import { FONT_SCALES, STATUSES, DOC_TEMPLATES, DEFAULT_TAGS, daysUntil } from "./constants";
 import { CaseProvider, useCases } from "./store/CaseContext";
 import { UIProvider, useUI } from "./store/UIContext";
 import KanbanView from "./components/KanbanView";
@@ -77,7 +77,8 @@ function LoginPage({ onLogin, error, loading }) {
 function AppShell({ user, onLogout }) {
   const { cases, dispatch, undo, redo, deleteCase, importCases } = useCases();
   const { view, cycleView, selected, setSelected, showNew, setShowNew, showTemplate, setShowTemplate,
-    searchQuery, setSearchQuery, filterStatus, setFilterStatus, sortKey, setSortKey,
+    searchQuery, setSearchQuery, filterStatus, setFilterStatus, filterTag, setFilterTag,
+    showArchived, setShowArchived, sortKey, setSortKey,
     fontScale, fs, cycleFontScale } = useUI();
 
   const [copiedId, setCopiedId] = useState(null);
@@ -168,11 +169,18 @@ function AppShell({ user, onLogout }) {
     navigator.clipboard.writeText(body).then(() => { setCopiedId(body); setTimeout(() => setCopiedId(null), 1500); });
   }
 
+  // ── Collect all tags used across cases ──
+  const allTags = [...new Set(cases.flatMap((c) => c.tags || []))].sort((a, b) => a.localeCompare(b, "ja"));
+
   // ── Filtered & sorted ──
-  const filteredCases = cases.filter((c) => {
+  const activeCases = cases.filter((c) => showArchived ? c.archived : !c.archived);
+  const archivedCount = cases.filter((c) => c.archived).length;
+
+  const filteredCases = activeCases.filter((c) => {
     const matchSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchStatus = filterStatus === "all" || c.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchTag = filterTag === "all" || (c.tags || []).includes(filterTag);
+    return matchSearch && matchStatus && matchTag;
   }).sort((a, b) => {
     if (sortKey === "deadline") return (a.deadline ? new Date(a.deadline) : new Date("9999")) - (b.deadline ? new Date(b.deadline) : new Date("9999"));
     if (sortKey === "name") return a.name.localeCompare(b.name, "ja");
@@ -181,7 +189,7 @@ function AppShell({ user, onLogout }) {
     return 0;
   });
 
-  const urgentCount = cases.filter((c) => { const d = daysUntil(c.deadline); return c.status !== "done" && d !== null && d <= 3; }).length;
+  const urgentCount = cases.filter((c) => { const d = daysUntil(c.deadline); return !c.archived && c.status !== "done" && d !== null && d <= 3; }).length;
   const selectedCase = cases.find((c) => c.id === selected);
 
   const btnSm = { background: "#312e81", color: "#a5b4fc", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "opacity 0.15s" };
@@ -216,6 +224,9 @@ function AppShell({ user, onLogout }) {
                   ? <button onClick={() => { checkAndNotify(cases); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔔 通知チェック</button>
                   : <button onClick={() => { requestNotification(); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔕 通知を有効にする</button>}
                 <div className={s.moreMenuDivider} />
+                <button onClick={() => { setShowArchived((v) => !v); setShowMoreMenu(false); }} className={s.moreMenuItem}>
+                  {showArchived ? `📂 通常表示に戻す` : `📦 アーカイブ (${archivedCount})`}
+                </button>
                 <button onClick={() => { setShowTemplate(true); setShowMoreMenu(false); }} className={s.moreMenuItem}>📄 テンプレート</button>
                 <button onClick={() => { exportData(); setShowMoreMenu(false); }} className={s.moreMenuItem}>📥 エクスポート</button>
                 <button onClick={() => { fileInputRef.current?.click(); setShowMoreMenu(false); }} className={s.moreMenuItem}>📤 インポート</button>
@@ -231,6 +242,14 @@ function AppShell({ user, onLogout }) {
           </div>
         </div>
       </div>
+
+      {/* ── Archive banner ── */}
+      {showArchived && (
+        <div className={s.archiveBanner} style={{ fontSize: fs(12) }}>
+          📦 アーカイブ表示中 ({archivedCount}件)
+          <button onClick={() => setShowArchived(false)} className={s.archiveBannerBtn} style={{ fontSize: fs(11) }}>通常表示に戻す</button>
+        </div>
+      )}
 
       {/* ── Search & Filter ── */}
       <div className={`${s.searchBar} search-bar`}>
@@ -248,13 +267,19 @@ function AppShell({ user, onLogout }) {
             </button>
           ))}
         </div>
+        {allTags.length > 0 && (
+          <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} className={s.sortSelect} style={{ fontSize: fs(12) }}>
+            <option value="all">全タグ</option>
+            {allTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+          </select>
+        )}
         <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={s.sortSelect} style={{ fontSize: fs(13) }}>
           <option value="deadline">期限順</option>
           <option value="name">名前順</option>
           <option value="created">作成日（古い順）</option>
           <option value="created_desc">作成日（新しい順）</option>
         </select>
-        {(searchQuery || filterStatus !== "all") && <span style={{ fontSize: fs(12), color: "#64748b" }}>{filteredCases.length}件</span>}
+        {(searchQuery || filterStatus !== "all" || filterTag !== "all") && <span style={{ fontSize: fs(12), color: "#64748b" }}>{filteredCases.length}件</span>}
       </div>
 
       {/* ── Main ── */}

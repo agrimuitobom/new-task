@@ -38,6 +38,10 @@ export const DOC_TEMPLATES = [
   },
 ];
 
+export const DEFAULT_TAGS = [
+  "教務", "総務", "生徒指導", "進路", "保健", "施設", "予算", "行事", "PTA", "その他",
+];
+
 export function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }

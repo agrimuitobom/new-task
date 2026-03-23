@@ -31,6 +31,23 @@
   font-family: var(--font-heading);
 }
 
+.nameTags {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.nameTag {
+  background: #eef2ff;
+  color: #6366f1;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-family: var(--font-body);
+}
+
 .statusBadge {
   border-radius: 6px;
   padding: 2px 9px;

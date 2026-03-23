@@ -10,7 +10,7 @@ function caseReducer(state, action) {
     case "SET":
       return action.cases;
     case "ADD":
-      return [...state, { id: genId(), tasks: [], note: "", ...action.data }];
+      return [...state, { id: genId(), tasks: [], note: "", tags: [], archived: false, ...action.data }];
     case "UPDATE":
       return state.map((c) => (c.id === action.id ? { ...c, ...action.patch } : c));
     case "DELETE":

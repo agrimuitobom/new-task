@@ -77,6 +77,22 @@
   font-family: var(--font-heading);
 }
 
+.cardTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 5px;
+}
+
+.cardTag {
+  background: #eef2ff;
+  color: #6366f1;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .progressRow {
   display: flex;
   justify-content: space-between;

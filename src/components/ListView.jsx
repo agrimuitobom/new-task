@@ -22,7 +22,14 @@ export default function ListView({ cases, onSelect, selectedId }) {
             return (
               <tr key={c.id} onClick={() => onSelect(c.id)}
                 className={`${s.row} ${selectedId === c.id ? s.rowSelected : ""}`}>
-                <td className={s.nameCell} style={{ fontSize: fs(14) }}>{c.name}</td>
+                <td className={s.nameCell} style={{ fontSize: fs(14) }}>
+                  {c.name}
+                  {(c.tags || []).length > 0 && (
+                    <span className={s.nameTags}>
+                      {(c.tags || []).map((tag) => <span key={tag} className={s.nameTag} style={{ fontSize: fs(9) }}>{tag}</span>)}
+                    </span>
+                  )}
+                </td>
                 <td>
                   <span className={s.statusBadge} style={{ background: st?.bg, color: st?.color, fontSize: fs(12) }}>{st?.label}</span>
                 </td>
