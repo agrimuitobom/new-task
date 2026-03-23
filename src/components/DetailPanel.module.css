@@ -1,0 +1,329 @@
+.panel {
+  width: 300px;
+  background: var(--c-surface);
+  border-left: 1px solid var(--c-border);
+  padding: 18px;
+  overflow: auto;
+  flex-shrink: 0;
+  font-family: var(--font-body);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.editInput {
+  font-weight: 700;
+  color: var(--c-text);
+  border: none;
+  border-bottom: 2px solid var(--c-indigo);
+  outline: none;
+  width: 100%;
+}
+
+.caseName {
+  font-weight: 700;
+  color: var(--c-text);
+  cursor: pointer;
+  flex: 1;
+  font-family: var(--font-heading);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--c-faint);
+  padding: 0;
+  margin-left: 8px;
+}
+
+.section { margin-bottom: 14px; }
+
+.label {
+  display: block;
+  font-weight: 700;
+  color: var(--c-muted);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-body);
+}
+
+.statusBtns {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.statusBtn {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dateInput {
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 5px 9px;
+  color: var(--c-text);
+  outline: none;
+}
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Tasks ── */
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.taskItem {
+  border: 1px solid var(--c-border-light);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: grab;
+  transition: border-top 0.1s;
+}
+
+.taskItem:active { cursor: grabbing; }
+.taskDone { background: #f8f7f4; }
+.taskDragOver { border-top: 3px solid var(--c-indigo); }
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dragHandle {
+  color: #cbd5e1;
+  font-size: 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.taskCheckbox {
+  accent-color: var(--c-indigo);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.taskLabel {
+  flex: 1;
+}
+
+.taskLabelDone {
+  color: var(--c-faint);
+  text-decoration: line-through;
+}
+
+.taskDeleteBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 14px;
+  padding: 0;
+}
+
+.taskDates {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  margin-left: 20px;
+}
+
+.taskDateInput {
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 2px 5px;
+  color: var(--c-muted);
+  outline: none;
+  width: 115px;
+}
+
+.taskDateArrow {
+  color: #cbd5e1;
+  line-height: 24px;
+}
+
+/* ── Comments & Attachments ── */
+.commentSection {
+  margin-top: 6px;
+  margin-left: 20px;
+  border-top: 1px solid var(--c-border-light);
+  padding-top: 4px;
+}
+
+.commentList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.commentItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.commentText {
+  flex: 1;
+  color: var(--c-muted);
+  word-break: break-word;
+}
+
+.commentTime {
+  color: #cbd5e1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.commentDeleteBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.commentInput {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  outline: none;
+  color: var(--c-text);
+}
+
+.attachmentList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.attachmentItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.attachmentLink {
+  flex: 1;
+  color: var(--c-indigo);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentLink:hover { text-decoration: underline; }
+
+.attachmentSize {
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.attachmentDeleteBtn {
+  composes: commentDeleteBtn;
+}
+
+.attachBtn {
+  background: none;
+  border: 1px dashed var(--c-border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--c-muted);
+  font-size: inherit;
+}
+
+.attachBtn:hover {
+  border-color: var(--c-indigo);
+  color: var(--c-indigo);
+}
+
+/* ── Quick-add templates ── */
+.quickAdd {
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.quickAddBtn {
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-muted);
+  cursor: pointer;
+}
+
+.addRow {
+  display: flex;
+  gap: 5px;
+}
+
+.addInput {
+  flex: 1;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 5px 9px;
+  outline: none;
+}
+
+.addBtn {
+  background: var(--c-indigo);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: opacity 0.15s;
+}
+
+/* ── Note / Delete ── */
+.noteArea {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: var(--c-text);
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.deleteBtn {
+  background: #fef2f2;
+  color: #dc2626;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+}

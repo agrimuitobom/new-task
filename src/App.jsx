@@ -1,239 +1,92 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { auth, googleProvider, db } from "./firebase";
+import { auth, googleProvider } from "./firebase";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { collection, doc, onSnapshot, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
-const FONT_HEADING = "'Shippori Mincho B1', 'Hiragino Mincho ProN', serif";
-const FONT_BODY = "'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif";
-const FONT_MONO = "'JetBrains Mono', 'SF Mono', monospace";
-
-const FONT_SCALES = [
-  { label: "小", value: 1.0 },
-  { label: "中", value: 1.15 },
-  { label: "大", value: 1.3 },
-];
-
-function sz(base, scale) { return Math.round(base * scale); }
-
-const STATUSES = [
-  { id: "draft",    label: "起案",    color: "#6366f1", bg: "#eef2ff", dot: "#818cf8" },
-  { id: "creating", label: "書類作成", color: "#c2820a", bg: "#fef9ee", dot: "#e9a832" },
-  { id: "pending",  label: "承認待ち", color: "#0891b2", bg: "#ecfeff", dot: "#22d3ee" },
-  { id: "done",     label: "完了",    color: "#059669", bg: "#ecfdf5", dot: "#34d399" },
-];
-
-const TASK_TEMPLATES = [
-  "起案書作成", "稟議書作成", "申請書作成", "通知文作成",
-  "上長確認", "関係部署連絡", "書類送付", "押印依頼",
-];
-
-const DOC_TEMPLATES = [
-  {
-    id: "ringi",
-    name: "稟議書",
-    body: `稟議書\n\n件名：〇〇について\n\n起案日：　　　年　　月　　日\n起案者：\n\n【目的・概要】\n\n\n【内容・詳細】\n\n\n【予算・費用】\n\n\n【スケジュール】\n\n\n【添付資料】\n`,
-  },
-  {
-    id: "tsuchi",
-    name: "通知文（外部向け）",
-    body: `拝啓\n\n〇〇の候、貴社ますますご清祥のこととお慶び申し上げます。\n\nさて、このたびは下記の件についてご連絡申し上げます。\n\n記\n\n１．件名：\n\n２．内容：\n\n３．日程：\n\n４．その他：\n\n以上、よろしくお願いいたします。\n\n敬具\n\n〇〇年〇〇月〇〇日\n西条農業高等学校\n`,
-  },
-  {
-    id: "houkoku",
-    name: "報告書",
-    body: `報告書\n\n件名：〇〇 実施報告\n\n報告日：　　　年　　月　　日\n報告者：\n\n【実施概要】\n・日時：\n・場所：\n・参加者：\n\n【実施内容】\n\n\n【結果・成果】\n\n\n【課題・改善点】\n\n\n【今後の対応】\n`,
-  },
-];
-
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  const diff = new Date(dateStr) - new Date();
-  return Math.ceil(diff / 86400000);
-}
-
-function DeadlineBadge({ date, fs: fsProp }) {
-  if (!date) return null;
-  const f = fsProp || ((v) => v);
-  const d = daysUntil(date);
-  let color = "#64748b", bg = "#f1f5f9", text = `${d}日後`;
-  if (d < 0)      { color = "#dc2626"; bg = "#fef2f2"; text = `${Math.abs(d)}日超過`; }
-  else if (d === 0) { color = "#dc2626"; bg = "#fef2f2"; text = "本日締切"; }
-  else if (d <= 3)  { color = "#d97706"; bg = "#fffbeb"; }
-  return (
-    <span style={{ fontSize: f(12), fontWeight: 600, color, background: bg, borderRadius: 6, padding: "2px 7px", border: `1px solid ${color}22`, fontFamily: FONT_MONO }}>
-      {text}
-    </span>
-  );
-}
+import { FONT_SCALES, STATUSES, DOC_TEMPLATES, daysUntil } from "./constants";
+import { CaseProvider, useCases } from "./store/CaseContext";
+import { UIProvider, useUI } from "./store/UIContext";
+import KanbanView from "./components/KanbanView";
+import ListView from "./components/ListView";
+import GanttView from "./components/GanttView";
+import DetailPanel from "./components/DetailPanel";
+import { Modal, NewCaseModal } from "./components/Modal";
+import s from "./App.module.css";
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [cases, setCases]       = useState([]);
-  const [view, setView]         = useState("kanban");
-  const [selected, setSelected] = useState(null);
-  const [showNew, setShowNew]   = useState(false);
-  const [showTemplate, setShowTemplate] = useState(false);
-  const [copiedId, setCopiedId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [sortKey, setSortKey] = useState("deadline");
-  const [fontScale, setFontScale] = useState(() => {
-    try { return parseFloat(localStorage.getItem("fontScale")) || 1.15; } catch { return 1.15; }
-  });
-  const fs = useCallback((base) => Math.round(base * fontScale), [fontScale]);
-  function cycleFontScale() {
-    setFontScale((prev) => {
-      const idx = FONT_SCALES.findIndex((s) => s.value === prev);
-      const next = FONT_SCALES[(idx + 1) % FONT_SCALES.length].value;
-      try { localStorage.setItem("fontScale", String(next)); } catch {}
-      return next;
-    });
-  }
 
-  // Firebase Auth 監視
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); });
     return unsub;
   }, []);
 
-  function handleLogin() {
-    signInWithPopup(auth, googleProvider).catch((err) => {
-      console.error("Login failed:", err);
-    });
+  if (authLoading) {
+    return <div className={s.loginPage}><div style={{ color: "#64748b" }}>読み込み中…</div></div>;
   }
-  async function handleLogout() {
-    await signOut(auth);
-    setCases([]);
-    setSelected(null);
+  if (!user) {
+    return <LoginPage onLogin={() => signInWithPopup(auth, googleProvider).catch(console.error)} />;
   }
 
-  // Undo/Redo 履歴管理
-  const historyRef = useRef([]);
-  const historyIndexRef = useRef(-1);
-  const isUndoRedoRef = useRef(false);
+  return (
+    <UIProvider>
+      <CaseProvider user={user} authLoading={authLoading}>
+        <AppShell user={user} onLogout={async () => { await signOut(auth); }} />
+      </CaseProvider>
+    </UIProvider>
+  );
+}
 
-  const pushHistory = useCallback((snapshot) => {
-    if (isUndoRedoRef.current) return;
-    const idx = historyIndexRef.current;
-    historyRef.current = historyRef.current.slice(0, idx + 1);
-    historyRef.current.push(JSON.stringify(snapshot));
-    if (historyRef.current.length > 50) historyRef.current.shift();
-    historyIndexRef.current = historyRef.current.length - 1;
-  }, []);
+function LoginPage({ onLogin }) {
+  return (
+    <div className={s.loginPage}>
+      <div className={s.loginCard}>
+        <div className={s.loginIcon}>📋</div>
+        <h1 className={s.loginTitle} style={{ fontSize: 22 }}>案件管理</h1>
+        <p className={s.loginSubtitle} style={{ fontSize: 14 }}>複数デバイスでタスクを同期管理</p>
+        <button onClick={onLogin} className={s.googleBtn} style={{ fontSize: 14 }}>
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.35 2.56 10.51l7.97-5.92z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.92C6.51 42.62 14.62 48 24 48z"/></svg>
+          Googleでログイン
+        </button>
+      </div>
+    </div>
+  );
+}
 
-  const undo = useCallback(() => {
-    if (historyIndexRef.current <= 0) return;
-    historyIndexRef.current -= 1;
-    isUndoRedoRef.current = true;
-    setCases(JSON.parse(historyRef.current[historyIndexRef.current]));
-    isUndoRedoRef.current = false;
-  }, []);
+function AppShell({ user, onLogout }) {
+  const { cases, dispatch, undo, redo, deleteCase, importCases } = useCases();
+  const { view, cycleView, selected, setSelected, showNew, setShowNew, showTemplate, setShowTemplate,
+    searchQuery, setSearchQuery, filterStatus, setFilterStatus, sortKey, setSortKey,
+    fontScale, fs, cycleFontScale } = useUI();
 
-  const redo = useCallback(() => {
-    if (historyIndexRef.current >= historyRef.current.length - 1) return;
-    historyIndexRef.current += 1;
-    isUndoRedoRef.current = true;
-    setCases(JSON.parse(historyRef.current[historyIndexRef.current]));
-    isUndoRedoRef.current = false;
-  }, []);
-
-  // Ctrl+Z / Ctrl+Shift+Z キーボードショートカット
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === "y") { e.preventDefault(); redo(); }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo]);
-
-  // Firestore リアルタイム同期（ログイン時）/ localStorage（未ログイン時）
-  const firestoreSkipRef = useRef(false);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      // 未ログイン時はlocalStorageから読み込み
-      try {
-        const saved = localStorage.getItem("cases-v1");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setCases(parsed);
-          historyRef.current = [JSON.stringify(parsed)];
-          historyIndexRef.current = 0;
-        }
-      } catch {}
-      return;
-    }
-    // Firestoreからリアルタイム購読
-    const colRef = collection(db, "users", user.uid, "cases");
-    const unsub = onSnapshot(colRef, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      firestoreSkipRef.current = true;
-      setCases(data);
-      historyRef.current = [JSON.stringify(data)];
-      historyIndexRef.current = 0;
-      firestoreSkipRef.current = false;
-    }, (err) => {
-      console.error("Firestore sync error:", err);
-    });
-    return unsub;
-  }, [user, authLoading]);
-
-  // cases変更時にFirestore/localStorageに保存
-  useEffect(() => {
-    if (authLoading) return;
-    pushHistory(cases);
-    if (!user) {
-      try { localStorage.setItem("cases-v1", JSON.stringify(cases)); } catch {}
-      return;
-    }
-    if (firestoreSkipRef.current) return;
-    // Firestoreに同期
-    const colRef = collection(db, "users", user.uid, "cases");
-    cases.forEach((c) => {
-      const { id, ...data } = c;
-      setDoc(doc(colRef, id), data).catch(() => {});
-    });
-  }, [cases, user, authLoading, pushHistory]);
-
+  const [copiedId, setCopiedId] = useState(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [notifyEnabled, setNotifyEnabled] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+  const [showDataMenu, setShowDataMenu] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // オンライン/オフライン状態の監視
   useEffect(() => {
-    const goOffline = () => setIsOffline(true);
-    const goOnline = () => setIsOffline(false);
-    window.addEventListener("offline", goOffline);
-    window.addEventListener("online", goOnline);
-    return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
+    const goOff = () => setIsOffline(true);
+    const goOn = () => setIsOffline(false);
+    window.addEventListener("offline", goOff);
+    window.addEventListener("online", goOn);
+    return () => { window.removeEventListener("offline", goOff); window.removeEventListener("online", goOn); };
   }, []);
 
-  // ブラウザ通知：期限が近い案件を通知
+  // ── Notifications ──
   const checkAndNotify = useCallback((caseList) => {
     if (Notification.permission !== "granted") return;
-    const urgent = caseList.filter((c) => {
-      if (c.status === "done") return false;
-      const d = daysUntil(c.deadline);
-      return d !== null && d <= 3;
-    });
-    if (urgent.length === 0) return;
-    const notifiedKey = "notified-date";
+    const urgent = caseList.filter((c) => c.status !== "done" && daysUntil(c.deadline) !== null && daysUntil(c.deadline) <= 3);
+    if (!urgent.length) return;
     const today = new Date().toISOString().slice(0, 10);
-    try { if (localStorage.getItem(notifiedKey) === today) return; } catch {}
+    try { if (localStorage.getItem("notified-date") === today) return; } catch {}
     const body = urgent.map((c) => {
       const d = daysUntil(c.deadline);
       const label = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? "本日締切" : `あと${d}日`;
       return `・${c.name}（${label}）`;
     }).join("\n");
     new Notification("案件管理 - 期限通知", { body, icon: "./icon-192.png" });
-    try { localStorage.setItem(notifiedKey, today); } catch {}
+    try { localStorage.setItem("notified-date", today); } catch {}
   }, []);
 
   function requestNotification() {
@@ -244,292 +97,166 @@ export default function App() {
     });
   }
 
-  // 起動時に通知チェック
   const initialNotifyDone = useRef(false);
   useEffect(() => {
-    if (cases.length > 0 && !initialNotifyDone.current) {
-      initialNotifyDone.current = true;
-      checkAndNotify(cases);
-    }
+    if (cases.length > 0 && !initialNotifyDone.current) { initialNotifyDone.current = true; checkAndNotify(cases); }
   }, [cases, checkAndNotify]);
 
-  // 30分ごとに通知チェック
   useEffect(() => {
     if (Notification.permission !== "granted") return;
-    const interval = setInterval(() => checkAndNotify(cases), 30 * 60 * 1000);
-    return () => clearInterval(interval);
+    const iv = setInterval(() => checkAndNotify(cases), 30 * 60 * 1000);
+    return () => clearInterval(iv);
   }, [cases, checkAndNotify]);
 
-  const [showDataMenu, setShowDataMenu] = useState(false);
-  const fileInputRef = useRef(null);
-
+  // ── Export / Import ──
   function exportData() {
     const blob = new Blob([JSON.stringify(cases, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `案件データ_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `案件データ_${new Date().toISOString().slice(0, 10)}.json`; a.click();
     URL.revokeObjectURL(url);
     setShowDataMenu(false);
   }
 
-  function importData(e) {
+  function handleImport(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (Array.isArray(data)) {
-          setCases(data);
-          setSelected(null);
-          // Firestoreにも一括書き込み
-          if (user) {
-            const colRef = collection(db, "users", user.uid, "cases");
-            const batch = writeBatch(db);
-            data.forEach((c) => { const { id, ...rest } = c; batch.set(doc(colRef, id), rest); });
-            batch.commit().catch(() => {});
-          }
-        } else {
-          alert("無効なデータ形式です");
-        }
-      } catch {
-        alert("JSONの読み込みに失敗しました");
-      }
+        if (Array.isArray(data)) { importCases(data); setSelected(null); }
+        else alert("無効なデータ形式です");
+      } catch { alert("JSONの読み込みに失敗しました"); }
     };
     reader.readAsText(file);
     e.target.value = "";
     setShowDataMenu(false);
   }
 
-  const selectedCase = cases.find((c) => c.id === selected);
-
-  function addCase(data) {
-    setCases((prev) => [...prev, { id: genId(), tasks: [], note: "", ...data }]);
-  }
-  function updateCase(id, patch) {
-    setCases((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  }
-  function deleteCase(id) {
-    setCases((prev) => prev.filter((c) => c.id !== id));
-    if (selected === id) setSelected(null);
-    if (user) deleteDoc(doc(db, "users", user.uid, "cases", id)).catch(() => {});
-  }
-  function addTask(caseId, label) {
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === caseId ? { ...c, tasks: [...c.tasks, { id: genId(), label, done: false }] } : c
-      )
-    );
-  }
-  function toggleTask(caseId, taskId) {
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === caseId
-          ? { ...c, tasks: c.tasks.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t)) }
-          : c
-      )
-    );
-  }
-  function updateTask(caseId, taskId, patch) {
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === caseId ? { ...c, tasks: c.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)) } : c
-      )
-    );
-  }
-  function deleteTask(caseId, taskId) {
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === caseId ? { ...c, tasks: c.tasks.filter((t) => t.id !== taskId) } : c
-      )
-    );
-  }
   function copyTemplate(body) {
-    navigator.clipboard.writeText(body).then(() => {
-      setCopiedId(body);
-      setTimeout(() => setCopiedId(null), 1500);
-    });
+    navigator.clipboard.writeText(body).then(() => { setCopiedId(body); setTimeout(() => setCopiedId(null), 1500); });
   }
 
+  // ── Filtered & sorted ──
   const filteredCases = cases.filter((c) => {
-    const matchesSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === "all" || c.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchStatus = filterStatus === "all" || c.status === filterStatus;
+    return matchSearch && matchStatus;
   }).sort((a, b) => {
-    if (sortKey === "deadline") {
-      const da = a.deadline ? new Date(a.deadline) : new Date("9999");
-      const db = b.deadline ? new Date(b.deadline) : new Date("9999");
-      return da - db;
-    }
+    if (sortKey === "deadline") return (a.deadline ? new Date(a.deadline) : new Date("9999")) - (b.deadline ? new Date(b.deadline) : new Date("9999"));
     if (sortKey === "name") return a.name.localeCompare(b.name, "ja");
-    if (sortKey === "created") return (a.id > b.id ? 1 : -1);
-    if (sortKey === "created_desc") return (a.id < b.id ? 1 : -1);
+    if (sortKey === "created") return a.id > b.id ? 1 : -1;
+    if (sortKey === "created_desc") return a.id < b.id ? 1 : -1;
     return 0;
   });
 
-  const urgentCount = cases.filter((c) => {
-    const d = daysUntil(c.deadline);
-    return c.status !== "done" && d !== null && d <= 3;
-  }).length;
+  const urgentCount = cases.filter((c) => { const d = daysUntil(c.deadline); return c.status !== "done" && d !== null && d <= 3; }).length;
+  const selectedCase = cases.find((c) => c.id === selected);
 
-  // ログイン画面
-  if (authLoading) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
-        <div style={{ textAlign: "center", color: "#64748b", fontSize: fs(14) }}>読み込み中…</div>
-      </div>
-    );
-  }
-  if (!user) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#faf9f6", fontFamily: FONT_BODY }}>
-        <div style={{ background: "#fff", borderRadius: 18, padding: "44px 40px", boxShadow: "0 8px 32px #0000000f, 0 2px 8px #0000000a", textAlign: "center", maxWidth: 380, border: "1px solid #f0ede8" }}>
-          <div style={{ width: 60, height: 60, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 18px", boxShadow: "0 4px 12px #6366f133" }}>📋</div>
-          <h1 style={{ fontSize: fs(22), fontWeight: 700, color: "#1e1b4b", margin: "0 0 8px", fontFamily: FONT_HEADING }}>案件管理</h1>
-          <p style={{ fontSize: fs(14), color: "#64748b", margin: "0 0 24px", letterSpacing: "0.04em" }}>複数デバイスでタスクを同期管理</p>
-          <button onClick={handleLogin}
-            style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "12px 28px", fontSize: fs(14), fontWeight: 600, cursor: "pointer", color: "#1e1b4b", display: "flex", alignItems: "center", gap: 10, margin: "0 auto", boxShadow: "0 2px 8px #0000000c", transition: "box-shadow 0.2s, border-color 0.2s", fontFamily: FONT_BODY }}>
-            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.94 23.94 0 000 24c0 3.77.9 7.35 2.56 10.51l7.97-5.92z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.92C6.51 42.62 14.62 48 24 48z"/></svg>
-            Googleでログイン
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const btnSm = { background: "#312e81", color: "#a5b4fc", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "opacity 0.15s" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#faf9f6", fontFamily: FONT_BODY }}>
-      <InjectMobileCSS />
-      {isOffline && (
-        <div style={{ background: "#fbbf24", color: "#78350f", textAlign: "center", padding: "4px 12px", fontSize: fs(12), fontWeight: 700 }}>
-          オフラインモード — データはローカルに保存されます
-        </div>
-      )}
-      {/* Header */}
-      <div className="app-header" style={{ background: "linear-gradient(135deg, #1e1b4b, #2d2a5e)", color: "#fff", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, boxShadow: "0 2px 16px #1e1b4b55", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#818cf8,#6366f1)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📋</div>
-          <span className="app-title" style={{ fontWeight: 700, fontSize: fs(16), fontFamily: FONT_HEADING, letterSpacing: "0.05em" }}>案件管理</span>
-          {urgentCount > 0 && (
-            <span style={{ background: "#ef4444", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: fs(11), fontWeight: 700 }}>⚠ {urgentCount}件</span>
-          )}
+    <div className={s.root}>
+      {isOffline && <div className={s.offlineBanner} style={{ fontSize: fs(12) }}>オフラインモード — データはローカルに保存されます</div>}
+
+      {/* ── Header ── */}
+      <div className={`${s.header} app-header`}>
+        <div className={s.headerLeft}>
+          <div className={s.headerIcon}>📋</div>
+          <span className={`${s.headerTitle} app-title`} style={{ fontSize: fs(16) }}>案件管理</span>
+          {urgentCount > 0 && <span className={s.urgentBadge} style={{ fontSize: fs(11) }}>⚠ {urgentCount}件</span>}
         </div>
         <div className="app-header-buttons" style={{ display: "flex", gap: 6 }}>
-          {notifyEnabled ? (
-            <button onClick={() => checkAndNotify(cases)} title="通知チェック" style={btnStyle("#312e81", "#a5b4fc")}>🔔</button>
-          ) : (
-            <button onClick={requestNotification} title="通知を有効にする" style={btnStyle("#312e81", "#64748b")}>🔕</button>
-          )}
-          <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
-          <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
-          <button onClick={cycleFontScale} title="文字サイズ変更" style={btnStyle("#312e81", "#a5b4fc")}>
-            文字{FONT_SCALES.find((s) => s.value === fontScale)?.label || "中"}
+          {notifyEnabled
+            ? <button onClick={() => checkAndNotify(cases)} title="通知チェック" style={btnSm}>🔔</button>
+            : <button onClick={requestNotification} title="通知を有効にする" style={{ ...btnSm, color: "#64748b" }}>🔕</button>}
+          <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnSm}>↩</button>
+          <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnSm}>↪</button>
+          <button onClick={cycleFontScale} title="文字サイズ変更"
+            style={{ ...btnSm, background: "#4f46e5", color: "#fff", border: "1px solid #818cf8", minWidth: 50 }}>
+            Aa {FONT_SCALES.find((sc) => sc.value === fontScale)?.label || "中"}
           </button>
           <div style={{ position: "relative" }}>
-            <button onClick={() => setShowDataMenu((v) => !v)} style={btnStyle("#312e81", "#a5b4fc")}>💾 データ</button>
+            <button onClick={() => setShowDataMenu((v) => !v)} style={btnSm}>💾 データ</button>
             {showDataMenu && (
-              <div style={{ position: "absolute", top: "110%", right: 0, background: "#fff", borderRadius: 10, boxShadow: "0 4px 20px #00000020", padding: 6, zIndex: 50, minWidth: 140 }}>
-                <button onClick={exportData} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: fs(13), cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
-                  📥 エクスポート
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "8px 12px", fontSize: fs(13), cursor: "pointer", borderRadius: 6, color: "#1e1b4b", fontWeight: 600 }}>
-                  📤 インポート
-                </button>
-                <input ref={fileInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
+              <div className={s.dataMenu}>
+                <button onClick={exportData} className={s.dataMenuItem} style={{ fontSize: fs(13) }}>📥 エクスポート</button>
+                <button onClick={() => fileInputRef.current?.click()} className={s.dataMenuItem} style={{ fontSize: fs(13) }}>📤 インポート</button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} style={{ display: "none" }} />
               </div>
             )}
           </div>
-          <button onClick={() => setShowTemplate(true)} style={btnStyle("#3730a3", "#fff")}>📄 テンプレ</button>
-          <button onClick={() => { setShowNew(true); setSelected(null); }} style={btnStyle("#6366f1", "#fff")}>＋ 新規</button>
-          <button onClick={() => setView(v => v === "kanban" ? "list" : v === "list" ? "gantt" : "kanban")} style={btnStyle("#312e81", "#a5b4fc")}>
+          <button onClick={() => setShowTemplate(true)} style={{ ...btnSm, background: "#3730a3", color: "#fff" }}>📄 テンプレ</button>
+          <button onClick={() => { setShowNew(true); setSelected(null); }} style={{ ...btnSm, background: "#6366f1", color: "#fff" }}>＋ 新規</button>
+          <button onClick={cycleView} style={btnSm}>
             {view === "kanban" ? "≡ リスト" : view === "list" ? "📊 ガント" : "⊞ カンバン"}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
-            {user.photoURL && <img src={user.photoURL} alt="" style={{ width: 24, height: 24, borderRadius: "50%" }} referrerPolicy="no-referrer" />}
-            <span style={{ fontSize: 11, color: "#a5b4fc", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.displayName?.split(" ")[0]}</span>
-            <button onClick={handleLogout} title="ログアウト" style={btnStyle("#312e81", "#94a3b8")}>↗</button>
+          <div className={s.userInfo}>
+            {user.photoURL && <img src={user.photoURL} alt="" className={s.userAvatar} referrerPolicy="no-referrer" />}
+            <span className={s.userName}>{user.displayName?.split(" ")[0]}</span>
+            <button onClick={onLogout} title="ログアウト" style={{ ...btnSm, color: "#94a3b8" }}>↗</button>
           </div>
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="search-bar" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff", borderBottom: "1px solid #eee8e0", flexWrap: "wrap" }}>
-        <input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="🔍 案件名で検索…"
-          style={{ flex: 1, minWidth: 150, border: "1px solid #e2e8f0", borderRadius: 7, padding: "6px 11px", fontSize: fs(13), outline: "none", color: "#1e1b4b" }}
-        />
+      {/* ── Search & Filter ── */}
+      <div className={`${s.searchBar} search-bar`}>
+        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 案件名で検索…" className={s.searchInput} style={{ fontSize: fs(13) }} />
         <div className="filter-buttons" style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => setFilterStatus("all")}
-            style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
-              background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
+          <button onClick={() => setFilterStatus("all")} className={s.filterBtn}
+            style={{ fontSize: fs(12), background: filterStatus === "all" ? "#1e1b4b" : "#f1f5f9", color: filterStatus === "all" ? "#fff" : "#64748b" }}>
             すべて
           </button>
-          {STATUSES.map((s) => (
-            <button key={s.id} onClick={() => setFilterStatus(s.id)}
-              style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
-                background: filterStatus === s.id ? s.bg : "#f1f5f9", color: filterStatus === s.id ? s.color : "#94a3b8" }}>
-              {s.label}
+          {STATUSES.map((st) => (
+            <button key={st.id} onClick={() => setFilterStatus(st.id)} className={s.filterBtn}
+              style={{ fontSize: fs(12), background: filterStatus === st.id ? st.bg : "#f1f5f9", color: filterStatus === st.id ? st.color : "#94a3b8" }}>
+              {st.label}
             </button>
           ))}
         </div>
-        <select value={sortKey} onChange={(e) => setSortKey(e.target.value)}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 8px", fontSize: fs(13), color: "#1e1b4b", outline: "none", background: "#fff" }}>
+        <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={s.sortSelect} style={{ fontSize: fs(13) }}>
           <option value="deadline">期限順</option>
           <option value="name">名前順</option>
           <option value="created">作成日（古い順）</option>
           <option value="created_desc">作成日（新しい順）</option>
         </select>
-        {(searchQuery || filterStatus !== "all") && (
-          <span style={{ fontSize: fs(12), color: "#64748b" }}>{filteredCases.length}件</span>
-        )}
+        {(searchQuery || filterStatus !== "all") && <span style={{ fontSize: fs(12), color: "#64748b" }}>{filteredCases.length}件</span>}
       </div>
 
-      <div className="main-content" style={{ display: "flex", height: "calc(100vh - 58px - 49px)" }}>
-        <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+      {/* ── Main ── */}
+      <div className={`${s.mainContent} main-content`}>
+        <div className={s.viewArea}>
           {view === "kanban" ? (
-            <KanbanView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} onStatusChange={(id, s) => updateCase(id, { status: s })} />
+            <KanbanView cases={filteredCases} onSelect={setSelected} selectedId={selected}
+              onStatusChange={(id, st, idx) => dispatch({ type: "STATUS_CHANGE", caseId: id, newStatus: st, insertIndex: idx })}
+              onReorder={(id, st, idx) => dispatch({ type: "REORDER_KANBAN", caseId: id, statusId: st, toIndex: idx })} />
           ) : view === "list" ? (
-            <ListView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} />
+            <ListView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
           ) : (
-            <GanttView fs={fs} cases={filteredCases} onSelect={setSelected} selectedId={selected} onUpdate={updateCase} />
+            <GanttView cases={filteredCases} onSelect={setSelected} selectedId={selected} />
           )}
         </div>
 
-        {selectedCase && (
-          <DetailPanel
-            fs={fs}
-            c={selectedCase}
-            onUpdate={(patch) => updateCase(selectedCase.id, patch)}
-            onDelete={() => deleteCase(selectedCase.id)}
-            onClose={() => setSelected(null)}
-            onAddTask={(label) => addTask(selectedCase.id, label)}
-            onToggleTask={(tid) => toggleTask(selectedCase.id, tid)}
-            onUpdateTask={(tid, patch) => updateTask(selectedCase.id, tid, patch)}
-            onDeleteTask={(tid) => deleteTask(selectedCase.id, tid)}
-          />
-        )}
+        {selectedCase && <DetailPanel c={selectedCase} onClose={() => setSelected(null)} />}
       </div>
 
-      {showNew && <NewCaseModal fs={fs} onAdd={addCase} onClose={() => setShowNew(false)} />}
+      {/* ── Modals ── */}
+      {showNew && <NewCaseModal onAdd={(data) => dispatch({ type: "ADD", data })} onClose={() => setShowNew(false)} />}
 
       {showTemplate && (
         <Modal onClose={() => setShowTemplate(false)} title="📄 書類テンプレート">
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {DOC_TEMPLATES.map((t) => (
-              <div key={t.id} style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, background: "#fff" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div key={t.id} className={s.templateCard}>
+                <div className={s.templateHeader}>
                   <span style={{ fontWeight: 700, color: "#1e1b4b", fontSize: fs(14) }}>{t.name}</span>
-                  <button onClick={() => copyTemplate(t.body)} style={btnStyle(copiedId === t.body ? "#059669" : "#6366f1", "#fff")}>
+                  <button onClick={() => copyTemplate(t.body)}
+                    style={{ ...btnSm, background: copiedId === t.body ? "#059669" : "#6366f1", color: "#fff" }}>
                     {copiedId === t.body ? "✓ コピー済" : "📋 コピー"}
                   </button>
                 </div>
-                <pre style={{ fontSize: fs(12), color: "#64748b", whiteSpace: "pre-wrap", background: "#faf9f6", borderRadius: 6, padding: 8, maxHeight: 100, overflow: "auto", margin: 0 }}>
-                  {t.body.slice(0, 180)}…
-                </pre>
+                <pre className={s.templatePre} style={{ fontSize: fs(12) }}>{t.body.slice(0, 180)}…</pre>
               </div>
             ))}
           </div>
@@ -537,720 +264,4 @@ export default function App() {
       )}
     </div>
   );
-}
-
-function KanbanView({ fs, cases, onSelect, selectedId, onStatusChange }) {
-  const [dragOverStatus, setDragOverStatus] = useState(null);
-
-  function handleDragOver(e, statusId) {
-    e.preventDefault();
-    setDragOverStatus(statusId);
-  }
-  function handleDrop(e, statusId) {
-    e.preventDefault();
-    const caseId = e.dataTransfer.getData("text/plain");
-    if (caseId) onStatusChange(caseId, statusId);
-    setDragOverStatus(null);
-  }
-  function handleDragLeave() {
-    setDragOverStatus(null);
-  }
-
-  return (
-    <div className="kanban-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
-      {STATUSES.map((s) => {
-        const cols = cases.filter((c) => c.status === s.id);
-        const isOver = dragOverStatus === s.id;
-        return (
-          <div key={s.id} className="kanban-column"
-            onDragOver={(e) => handleDragOver(e, s.id)}
-            onDrop={(e) => handleDrop(e, s.id)}
-            onDragLeave={handleDragLeave}
-            style={{ borderRadius: 10, padding: 6, minHeight: 80, transition: "background 0.15s",
-              background: isOver ? s.bg : "transparent", border: isOver ? `2px dashed ${s.color}44` : "2px dashed transparent" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-              <div style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot }} />
-              <span style={{ fontWeight: 700, color: s.color, fontSize: fs(13), fontFamily: FONT_HEADING, letterSpacing: "0.03em" }}>{s.label}</span>
-              <span style={{ background: s.bg, color: s.color, borderRadius: 10, padding: "0 6px", fontSize: fs(12), fontWeight: 700 }}>{cols.length}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              {cols.map((c) => (
-                <CaseCard key={c.id} c={c} fs={fs} onClick={() => onSelect(c.id)} isSelected={selectedId === c.id} onStatusChange={onStatusChange} />
-              ))}
-              {cols.length === 0 && (
-                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: fs(12), padding: "16px 0" }}>
-                  {isOver ? "ここにドロップ" : "なし"}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ListView({ fs, cases, onSelect, selectedId }) {
-  return (
-    <div style={{ maxWidth: 800 }}>
-      <table className="list-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            {["案件名", "ステータス", "期限", "タスク"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: fs(12), color: "#64748b", fontWeight: 700 }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {cases.map((c) => {
-            const st = STATUSES.find((s) => s.id === c.status);
-            const done = c.tasks.filter((t) => t.done).length;
-            return (
-              <tr key={c.id} onClick={() => onSelect(c.id)}
-                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: selectedId === c.id ? "#eef2ff" : "transparent" }}>
-                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: fs(14), fontFamily: FONT_HEADING }}>{c.name}</td>
-                <td style={{ padding: "10px" }}>
-                  <span style={{ background: st?.bg, color: st?.color, borderRadius: 6, padding: "2px 9px", fontSize: fs(12), fontWeight: 700 }}>{st?.label}</span>
-                </td>
-                <td style={{ padding: "10px" }}><DeadlineBadge date={c.deadline} fs={fs} /></td>
-                <td style={{ padding: "10px", fontSize: fs(13), color: "#64748b" }}>{c.tasks.length > 0 ? `${done}/${c.tasks.length}` : "—"}</td>
-              </tr>
-            );
-          })}
-          {cases.length === 0 && (
-            <tr><td colSpan={4} style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: fs(13) }}>案件がありません</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function GanttView({ fs, cases, onSelect, selectedId, onUpdate }) {
-  const DAY_W = 36;
-  const ROW_H = 48;
-  const SUB_ROW_H = 40;
-  const LEFT_W = 280;
-  const HEADER_H = 70;
-  const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-  const [expanded, setExpanded] = useState({});
-
-  function toggleExpand(caseId) {
-    setExpanded((prev) => ({ ...prev, [caseId]: !prev[caseId] }));
-  }
-
-  // 全日付（案件+タスク）を集めてタイムライン範囲を計算
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const allDates = [today];
-
-  const casesWithDates = cases.filter((c) => c.deadline).map((c) => {
-    const end = new Date(c.deadline);
-    let start;
-    if (c.startDate) {
-      start = new Date(c.startDate);
-    } else {
-      start = new Date(end);
-      start.setDate(start.getDate() - 14);
-    }
-    allDates.push(start, end);
-    // タスクの日付も収集
-    (c.tasks || []).forEach((t) => {
-      if (t.startDate) allDates.push(new Date(t.startDate));
-      if (t.deadline) allDates.push(new Date(t.deadline));
-    });
-    return { ...c, _start: start, _end: end };
-  });
-
-  // タスクの日付も範囲に含める（期限なし案件のタスクも）
-  cases.filter((c) => !c.deadline).forEach((c) => {
-    (c.tasks || []).forEach((t) => {
-      if (t.startDate) allDates.push(new Date(t.startDate));
-      if (t.deadline) allDates.push(new Date(t.deadline));
-    });
-  });
-
-  let rangeStart = new Date(Math.min(...allDates));
-  let rangeEnd = new Date(Math.max(...allDates));
-  if (rangeStart.getTime() === rangeEnd.getTime()) {
-    rangeEnd = new Date(rangeStart);
-    rangeEnd.setDate(rangeEnd.getDate() + 30);
-  }
-  rangeStart.setDate(rangeStart.getDate() - 3);
-  rangeEnd.setDate(rangeEnd.getDate() + 7);
-
-  // 日付配列
-  const days = [];
-  const d = new Date(rangeStart);
-  while (d <= rangeEnd) {
-    days.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-
-  // 月ヘッダー
-  const months = [];
-  let currentMonth = null;
-  days.forEach((day, i) => {
-    const key = `${day.getFullYear()}-${day.getMonth()}`;
-    if (key !== currentMonth) {
-      months.push({ year: day.getFullYear(), month: day.getMonth() + 1, startIdx: i, count: 1 });
-      currentMonth = key;
-    } else {
-      months[months.length - 1].count++;
-    }
-  });
-
-  function countBusinessDays(start, end) {
-    let count = 0;
-    const cur = new Date(start);
-    while (cur <= end) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) count++;
-      cur.setDate(cur.getDate() + 1);
-    }
-    return count;
-  }
-
-  function calcBar(startDate, endDate, color, bgColor) {
-    const s = new Date(startDate);
-    const e = new Date(endDate);
-    const startDiff = Math.round((s - rangeStart) / 86400000);
-    const duration = Math.round((e - s) / 86400000) + 1;
-    return {
-      left: startDiff * DAY_W,
-      width: Math.max(duration * DAY_W - 4, DAY_W),
-      color, bg: bgColor,
-    };
-  }
-
-  const todayIdx = Math.round((today - rangeStart) / 86400000);
-
-  const summary = casesWithDates.length > 0 ? {
-    start: new Date(Math.min(...casesWithDates.map((c) => c._start))),
-    end: new Date(Math.max(...casesWithDates.map((c) => c._end))),
-  } : null;
-
-  const timelineRef = useRef(null);
-  const leftRef = useRef(null);
-
-  useEffect(() => {
-    if (timelineRef.current && todayIdx > 3) {
-      timelineRef.current.scrollLeft = (todayIdx - 3) * DAY_W;
-    }
-  }, []);
-
-  // 左右パネルの縦スクロール同期
-  useEffect(() => {
-    const timeline = timelineRef.current;
-    const left = leftRef.current;
-    if (!timeline || !left) return;
-    let syncing = false;
-    function syncLeft() {
-      if (syncing) return;
-      syncing = true;
-      left.scrollTop = timeline.scrollTop;
-      syncing = false;
-    }
-    function syncRight() {
-      if (syncing) return;
-      syncing = true;
-      timeline.scrollTop = left.scrollTop;
-      syncing = false;
-    }
-    timeline.addEventListener("scroll", syncLeft);
-    left.addEventListener("scroll", syncRight);
-    return () => {
-      timeline.removeEventListener("scroll", syncLeft);
-      left.removeEventListener("scroll", syncRight);
-    };
-  }, []);
-
-  // 行データをフラットに生成（案件行 + 展開時のサブタスク行）
-  const rows = [];
-  cases.forEach((c) => {
-    const st = STATUSES.find((s) => s.id === c.status);
-    const cwd = casesWithDates.find((cw) => cw.id === c.id);
-    const hasTasks = c.tasks && c.tasks.length > 0;
-    const isExpanded = expanded[c.id];
-    const duration = cwd ? Math.round((cwd._end - cwd._start) / 86400000) + 1 : null;
-
-    rows.push({ type: "case", c, st, cwd, duration, hasTasks, isExpanded });
-
-    if (isExpanded && hasTasks) {
-      c.tasks.forEach((t) => {
-        rows.push({ type: "task", t, caseId: c.id, parentSt: st });
-      });
-    }
-  });
-
-  // 週末背景を描画するヘルパー
-  function WeekendBg({ height }) {
-    return (
-      <div style={{ display: "flex", position: "absolute", inset: 0 }}>
-        {days.map((day, i) => {
-          const dow = day.getDay();
-          return (
-            <div key={i} style={{ width: DAY_W, flexShrink: 0, height, background: (dow === 0 || dow === 6) ? "#f8f7f4" : "transparent", borderRight: "1px solid transparent" }} />
-          );
-        })}
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", maxWidth: "100%", overflow: "hidden" }}>
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* 左パネル */}
-        <div ref={leftRef} style={{ width: LEFT_W, flexShrink: 0, borderRight: "2px solid #e2e8f0", background: "#fff", overflow: "auto" }}>
-          <div style={{ height: HEADER_H, borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "flex-end", padding: "0 12px 8px", fontSize: fs(12), fontWeight: 700, color: "#64748b" }}>
-            <span style={{ flex: 1 }}>タスク名</span>
-            <span style={{ width: 40, textAlign: "center" }}>日数</span>
-          </div>
-          {/* マイルストーン行高さ合わせ */}
-          <div style={{ height: 20, borderBottom: "1px solid #e2e8f0" }} />
-
-          {rows.map((row, idx) => {
-            if (row.type === "case") {
-              const { c, st, duration, hasTasks, isExpanded } = row;
-              return (
-                <div key={`c-${c.id}`} style={{
-                  height: ROW_H, display: "flex", alignItems: "center", padding: "0 8px 0 8px", gap: 6,
-                  borderBottom: "1px solid #f1f5f9", cursor: "pointer",
-                  background: selectedId === c.id ? "#eef2ff" : "#fff",
-                }}>
-                  {hasTasks ? (
-                    <button onClick={(e) => { e.stopPropagation(); toggleExpand(c.id); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "#64748b", padding: "2px 4px", width: 20 }}>
-                      {isExpanded ? "▼" : "▶"}
-                    </button>
-                  ) : (
-                    <div style={{ width: 20 }} />
-                  )}
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: st?.dot || "#cbd5e1", flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelect(c.id)}>
-                    <div style={{ fontSize: fs(13), fontWeight: 600, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: FONT_HEADING }}>{c.name}</div>
-                  </div>
-                  <div style={{ width: 40, textAlign: "center", fontSize: fs(12), color: "#64748b", fontWeight: 600 }}>
-                    {duration ? `${duration}日` : "—"}
-                  </div>
-                </div>
-              );
-            } else {
-              const { t, caseId } = row;
-              const tDuration = (t.startDate && t.deadline) ? Math.round((new Date(t.deadline) - new Date(t.startDate)) / 86400000) + 1 : null;
-              return (
-                <div key={`t-${t.id}`} style={{
-                  height: SUB_ROW_H, display: "flex", alignItems: "center", padding: "0 8px 0 36px", gap: 6,
-                  borderBottom: "1px solid #f8f7f4", background: "#fafaf9",
-                }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: t.done ? "#34d399" : "#cbd5e1", flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: fs(11), color: t.done ? "#94a3b8" : "#475569", textDecoration: t.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {t.label}
-                    </div>
-                  </div>
-                  <div style={{ width: 40, textAlign: "center", fontSize: fs(11), color: "#94a3b8" }}>
-                    {tDuration ? `${tDuration}日` : "—"}
-                  </div>
-                </div>
-              );
-            }
-          })}
-
-          {cases.length === 0 && (
-            <div style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: fs(13) }}>案件がありません</div>
-          )}
-
-          {summary && (
-            <div style={{ margin: 12, padding: 14, background: "#faf9f6", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: fs(13), fontWeight: 700, color: "#1e1b4b", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: FONT_HEADING }}>
-                スケジュール概要 <span style={{ color: "#94a3b8", fontSize: fs(10) }}>▼</span>
-              </div>
-              <div style={{ fontSize: fs(12), color: "#1e1b4b", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
-                <span style={{ color: "#64748b" }}>開始日</span>
-                <span style={{ fontWeight: 700 }}>{summary.start.getFullYear()}年{summary.start.getMonth() + 1}月{summary.start.getDate()}日</span>
-                <span style={{ color: "#64748b" }}>完了日</span>
-                <span style={{ fontWeight: 700 }}>{summary.end.getFullYear()}年{summary.end.getMonth() + 1}月{summary.end.getDate()}日</span>
-                <span style={{ color: "#64748b" }}>合計営業日</span>
-                <span style={{ fontWeight: 700 }}>{countBusinessDays(summary.start, summary.end)}日</span>
-                <span style={{ color: "#64748b" }}>期間</span>
-                <span style={{ fontWeight: 700 }}>約{Math.ceil((summary.end - summary.start) / (7 * 86400000))}週間</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 右パネル: タイムライン */}
-        <div ref={timelineRef} style={{ flex: 1, overflow: "auto", background: "#fff" }}>
-          <div style={{ minWidth: days.length * DAY_W, position: "relative" }}>
-            {/* 月ヘッダー */}
-            <div style={{ display: "flex", height: 28, borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0, background: "#fff", zIndex: 5 }}>
-              {months.map((m, i) => (
-                <div key={i} style={{
-                  width: m.count * DAY_W, borderRight: "1px solid #e2e8f0",
-                  display: "flex", alignItems: "center", paddingLeft: 8,
-                  fontSize: 12, fontWeight: 700, color: "#1e1b4b",
-                }}>
-                  {m.year}年{m.month}月
-                </div>
-              ))}
-            </div>
-
-            {/* 日付ヘッダー */}
-            <div style={{ display: "flex", height: HEADER_H - 28, borderBottom: "1px solid #e2e8f0", position: "sticky", top: 28, background: "#fff", zIndex: 5 }}>
-              {days.map((day, i) => {
-                const dow = day.getDay();
-                const isWeekend = dow === 0 || dow === 6;
-                const isToday = day.toDateString() === today.toDateString();
-                return (
-                  <div key={i} style={{
-                    width: DAY_W, textAlign: "center", flexShrink: 0, borderRight: "1px solid #f1f5f9",
-                    background: isToday ? "#eef2ff" : isWeekend ? "#f8f7f4" : "#fff",
-                    display: "flex", flexDirection: "column", justifyContent: "center", gap: 1,
-                  }}>
-                    <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 600, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#1e1b4b", fontFamily: FONT_MONO }}>
-                      {day.getDate()}
-                    </div>
-                    <div style={{ fontSize: 9, color: isToday ? "#6366f1" : dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#94a3b8", fontWeight: 600 }}>
-                      {WEEKDAYS[dow]}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* マイルストーン行 */}
-            <div style={{ display: "flex", height: 20, borderBottom: "1px solid #e2e8f0" }}>
-              {days.map((day, i) => {
-                const isToday = day.toDateString() === today.toDateString();
-                const dow = day.getDay();
-                const isWeekend = dow === 0 || dow === 6;
-                return (
-                  <div key={i} style={{ width: DAY_W, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                    background: isWeekend ? "#f8f7f4" : "#fff", borderRight: "1px solid #f1f5f9" }}>
-                    {isToday && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* データ行 */}
-            {rows.map((row, idx) => {
-              if (row.type === "case") {
-                const { c, cwd, st } = row;
-                const bar = cwd ? calcBar(cwd._start, cwd._end, st?.color || "#6366f1", st?.dot || "#818cf8") : null;
-                return (
-                  <div key={`c-${c.id}`} style={{ height: ROW_H, position: "relative", borderBottom: "1px solid #f1f5f9" }}>
-                    <WeekendBg height={ROW_H} />
-                    {bar && (
-                      <div onClick={() => onSelect(c.id)} style={{
-                        position: "absolute", top: 8, left: bar.left + 2, width: bar.width,
-                        height: ROW_H - 16, borderRadius: 6, cursor: "pointer",
-                        background: `linear-gradient(135deg, ${bar.bg}, ${bar.bg}88)`,
-                        display: "flex", alignItems: "center", paddingLeft: 10,
-                        fontSize: fs(12), fontWeight: 600, color: "#fff",
-                        boxShadow: selectedId === c.id ? `0 0 0 2px ${bar.color}` : "none",
-                        overflow: "hidden", whiteSpace: "nowrap", zIndex: 1,
-                      }}>
-                        {c.name}
-                      </div>
-                    )}
-                    {!bar && (
-                      <div style={{ position: "absolute", top: 14, left: 8, fontSize: fs(11), color: "#94a3b8", fontStyle: "italic", zIndex: 1 }}>
-                        期限未設定
-                      </div>
-                    )}
-                  </div>
-                );
-              } else {
-                const { t, parentSt } = row;
-                const hasTaskDates = t.startDate && t.deadline;
-                const taskBar = hasTaskDates ? calcBar(t.startDate, t.deadline, "#0891b2", t.done ? "#34d399" : "#22d3ee") : null;
-                return (
-                  <div key={`t-${t.id}`} style={{ height: SUB_ROW_H, position: "relative", borderBottom: "1px solid #f8f7f4", background: "#fafaf9" }}>
-                    <WeekendBg height={SUB_ROW_H} />
-                    {taskBar && (
-                      <div style={{
-                        position: "absolute", top: 8, left: taskBar.left + 2, width: taskBar.width,
-                        height: SUB_ROW_H - 16, borderRadius: 5, zIndex: 1,
-                        background: t.done
-                          ? "repeating-linear-gradient(135deg, #34d399, #34d399 4px, #34d39966 4px, #34d39966 8px)"
-                          : `linear-gradient(135deg, ${taskBar.bg}, ${taskBar.bg}88)`,
-                        display: "flex", alignItems: "center", paddingLeft: 8,
-                        fontSize: fs(11), fontWeight: 600, color: "#fff",
-                        overflow: "hidden", whiteSpace: "nowrap",
-                      }}>
-                        {t.label}
-                      </div>
-                    )}
-                    {!taskBar && (
-                      <div style={{ position: "absolute", top: 12, left: 8, fontSize: fs(11), color: "#cbd5e1", fontStyle: "italic", zIndex: 1 }}>
-                        日付未設定
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-            })}
-
-            {/* 今日の縦線 */}
-            {todayIdx >= 0 && todayIdx < days.length && (
-              <div style={{
-                position: "absolute", top: 0, left: todayIdx * DAY_W + DAY_W / 2,
-                width: 2, height: "100%", background: "#6366f188", zIndex: 3, pointerEvents: "none",
-              }} />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CaseCard({ c, fs, onClick, isSelected, onStatusChange }) {
-  const done = c.tasks.filter((t) => t.done).length;
-  const total = c.tasks.length;
-  return (
-    <div
-      draggable
-      onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; }}
-      onClick={onClick} style={{
-      background: "#fff", borderRadius: 12, padding: "11px 13px", cursor: "grab",
-      border: isSelected ? "2px solid #6366f1" : "2px solid transparent",
-      boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 6px #0000000a, 0 1px 2px #0000000a",
-      transition: "box-shadow 0.2s, border-color 0.2s",
-    }}>
-      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: fs(14), marginBottom: 5, fontFamily: FONT_HEADING }}>{c.name}</div>
-      {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} fs={fs} /></div>}
-      {total > 0 && (
-        <div style={{ marginBottom: 7 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: fs(11), color: "#94a3b8", marginBottom: 2 }}>
-            <span>タスク</span><span>{done}/{total}</span>
-          </div>
-          <div style={{ height: 3, background: "#f1f5f9", borderRadius: 4 }}>
-            <div style={{ height: 3, background: "#6366f1", borderRadius: 4, width: `${total ? (done / total) * 100 : 0}%` }} />
-          </div>
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-        {STATUSES.map((s) => (
-          <button key={s.id} onClick={(e) => { e.stopPropagation(); onStatusChange(c.id, s.id); }}
-            style={{ padding: "2px 7px", fontSize: fs(11), borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 600,
-              background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8" }}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DetailPanel({ fs, c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, onUpdateTask, onDeleteTask }) {
-  const [newTask, setNewTask] = useState("");
-  const [editName, setEditName] = useState(false);
-  const [nameVal, setNameVal] = useState(c.name);
-  const [noteVal, setNoteVal] = useState(c.note || "");
-
-  useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
-
-  return (
-    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0, fontFamily: FONT_BODY }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-        {editName ? (
-          <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
-            onBlur={() => { onUpdate({ name: nameVal }); setEditName(false); }} autoFocus
-            style={{ fontSize: fs(15), fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
-        ) : (
-          <div style={{ fontWeight: 700, fontSize: fs(15), color: "#1e1b4b", cursor: "pointer", flex: 1, fontFamily: FONT_HEADING }} onClick={() => setEditName(true)}>
-            {c.name} <span style={{ fontSize: fs(10), color: "#94a3b8" }}>✏</span>
-          </div>
-        )}
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: 0, marginLeft: 8 }}>×</button>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>ステータス</label>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {STATUSES.map((s) => (
-            <button key={s.id} onClick={() => onUpdate({ status: s.id })}
-              style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
-                background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8",
-                boxShadow: c.status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>開始日</label>
-        <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>期限</label>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="date" value={c.deadline || ""} onChange={(e) => onUpdate({ deadline: e.target.value })}
-            style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
-          <DeadlineBadge date={c.deadline} fs={fs} />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>タスク ({c.tasks.filter(t=>t.done).length}/{c.tasks.length})</label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 7 }}>
-          {c.tasks.map((t) => (
-            <div key={t.id} style={{ border: "1px solid #f1f5f9", borderRadius: 8, padding: "6px 8px", background: t.done ? "#f8f7f4" : "#fff" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t.id)}
-                  style={{ accentColor: "#6366f1", width: 14, height: 14, cursor: "pointer" }} />
-                <span style={{ flex: 1, fontSize: fs(13), color: t.done ? "#94a3b8" : "#1e1b4b", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                <button onClick={() => onDeleteTask(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 14, padding: 0 }}>×</button>
-              </div>
-              <div style={{ display: "flex", gap: 4, marginTop: 4, marginLeft: 20 }}>
-                <input type="date" value={t.startDate || ""} onChange={(e) => onUpdateTask(t.id, { startDate: e.target.value })}
-                  title="開始日"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
-                <span style={{ fontSize: fs(11), color: "#cbd5e1", lineHeight: "24px" }}>→</span>
-                <input type="date" value={t.deadline || ""} onChange={(e) => onUpdateTask(t.id, { deadline: e.target.value })}
-                  title="期限"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginBottom: 6, display: "flex", flexWrap: "wrap", gap: 3 }}>
-          {TASK_TEMPLATES.map((tl) => (
-            <button key={tl} onClick={() => onAddTask(tl)}
-              style={{ fontSize: fs(11), padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#faf9f6", color: "#64748b", cursor: "pointer" }}>
-              + {tl}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 5 }}>
-          <input value={newTask} onChange={(e) => setNewTask(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
-            placeholder="タスクを入力… Enter"
-            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), outline: "none" }} />
-          <button onClick={() => { if (newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
-            style={btnStyle("#6366f1", "#fff")}>追加</button>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 18 }}>
-        <label style={labelStyleFn(fs)}>メモ</label>
-        <textarea value={noteVal} onChange={(e) => setNoteVal(e.target.value)} onBlur={() => onUpdate({ note: noteVal })}
-          rows={4} placeholder="案件に関するメモ…"
-          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 9px", fontSize: fs(13), color: "#1e1b4b", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
-      </div>
-
-      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) onDelete(); }}
-        style={{ background: "#fef2f2", color: "#dc2626", border: "none", borderRadius: 8, padding: "8px", fontSize: fs(13), fontWeight: 700, cursor: "pointer", width: "100%" }}>
-        🗑 この案件を削除
-      </button>
-    </div>
-  );
-}
-
-function NewCaseModal({ fs, onAdd, onClose }) {
-  const [name, setName]       = useState("");
-  const [status, setStatus]   = useState("draft");
-  const [deadline, setDeadline] = useState("");
-
-  function submit() {
-    if (!name.trim()) return;
-    onAdd({ name: name.trim(), status, deadline });
-    onClose();
-  }
-
-  return (
-    <Modal onClose={onClose} title="＋ 新規案件">
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <label style={labelStyleFn(fs)}>案件名 *</label>
-          <input value={name} onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
-            placeholder="例：〇〇事業補助金申請" style={inputStyleFn(fs)} />
-        </div>
-        <div>
-          <label style={labelStyleFn(fs)}>初期ステータス</label>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {STATUSES.map((s) => (
-              <button key={s.id} onClick={() => setStatus(s.id)}
-                style={{ padding: "4px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700, fontSize: fs(13),
-                  background: status === s.id ? s.bg : "#f1f5f9", color: status === s.id ? s.color : "#94a3b8",
-                  boxShadow: status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label style={labelStyleFn(fs)}>期限（任意）</label>
-          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inputStyleFn(fs)} />
-        </div>
-        <button onClick={submit}
-          style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: fs(15), fontWeight: 700, cursor: "pointer", marginTop: 4, fontFamily: FONT_HEADING, letterSpacing: "0.05em", boxShadow: "0 2px 8px #6366f133" }}>
-          作成する
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function Modal({ onClose, title, children }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000050", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 440, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px #00000025, 0 4px 16px #0000000f", fontFamily: FONT_BODY }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "#1e1b4b", fontFamily: FONT_HEADING }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// モバイル対応CSS（styleタグで挿入）
-const mobileCSS = `
-@media (max-width: 768px) {
-  .app-header { height: auto !important; padding: 8px 12px !important; }
-  .app-header-buttons { gap: 4px !important; }
-  .app-header-buttons button { padding: 5px 8px !important; font-size: 11px !important; }
-  .search-bar { padding: 8px 12px !important; gap: 6px !important; }
-  .search-bar input { min-width: 100px !important; font-size: 12px !important; }
-  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .filter-buttons button { white-space: nowrap; font-size: 10px !important; padding: 3px 7px !important; }
-  .main-content { flex-direction: column !important; }
-  .kanban-grid { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; gap: 12px !important; padding-bottom: 8px; scroll-snap-type: x mandatory; }
-  .kanban-column { min-width: 220px !important; flex-shrink: 0 !important; scroll-snap-align: start; }
-  .detail-panel { width: 100% !important; border-left: none !important; border-top: 1px solid #e2e8f0; max-height: 50vh; position: relative !important; }
-  .list-table { font-size: 11px !important; }
-  .list-table td, .list-table th { padding: 6px 5px !important; }
-}
-@media (max-width: 480px) {
-  .kanban-column { min-width: 180px !important; }
-  .app-title { font-size: 14px !important; }
-}
-`;
-
-function InjectMobileCSS() {
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = mobileCSS;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
-  return null;
-}
-
-function labelStyleFn(fs) { return { display: "block", fontSize: fs(11), fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY }; }
-const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: FONT_BODY };
-function inputStyleFn(fs) { return { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: fs(14), outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" }; }
-const inputStyle = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 14, outline: "none", boxSizing: "border-box", color: "#1e1b4b", fontFamily: FONT_BODY, transition: "border-color 0.2s" };
-function btnStyle(bg, color) {
-  return { background: bg, color, border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT_BODY, transition: "opacity 0.15s" };
 }

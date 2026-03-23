@@ -1,0 +1,250 @@
+.root {
+  min-height: 100vh;
+  background: var(--c-bg);
+  font-family: var(--font-body);
+}
+
+.offlineBanner {
+  background: #fbbf24;
+  color: #78350f;
+  text-align: center;
+  padding: 4px 12px;
+  font-weight: 700;
+}
+
+.header {
+  background: linear-gradient(135deg, #1e1b4b, #2d2a5e);
+  color: #fff;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 58px;
+  box-shadow: 0 2px 16px #1e1b4b55;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headerIcon {
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.headerTitle {
+  font-weight: 700;
+  font-family: var(--font-heading);
+  letter-spacing: 0.05em;
+}
+
+.urgentBadge {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-weight: 700;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--c-surface);
+  border-bottom: 1px solid #eee8e0;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 150px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 6px 11px;
+  outline: none;
+  color: var(--c-text);
+}
+
+.filterBtn {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.sortSelect {
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: var(--c-text);
+  outline: none;
+  background: var(--c-surface);
+}
+
+.mainContent {
+  display: flex;
+  height: calc(100vh - 58px - 49px);
+}
+
+.viewArea {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.dataMenu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: var(--c-surface);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px #00000020;
+  padding: 6px;
+  z-index: 50;
+  min-width: 140px;
+}
+
+.dataMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.dataMenuItem:hover {
+  background: var(--c-border-light);
+}
+
+/* Login page */
+.loginPage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+  font-family: var(--font-body);
+}
+
+.loginCard {
+  background: var(--c-surface);
+  border-radius: 18px;
+  padding: 44px 40px;
+  box-shadow: 0 8px 32px #0000000f, 0 2px 8px #0000000a;
+  text-align: center;
+  max-width: 380px;
+  border: 1px solid #f0ede8;
+}
+
+.loginIcon {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 18px;
+  box-shadow: 0 4px 12px #6366f133;
+}
+
+.loginTitle {
+  font-weight: 700;
+  color: var(--c-text);
+  margin: 0 0 8px;
+  font-family: var(--font-heading);
+}
+
+.loginSubtitle {
+  color: var(--c-muted);
+  margin: 0 0 24px;
+  letter-spacing: 0.04em;
+}
+
+.googleBtn {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--c-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
+  box-shadow: 0 2px 8px #0000000c;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  font-family: var(--font-body);
+}
+
+.googleBtn:hover {
+  border-color: var(--c-indigo);
+  box-shadow: 0 4px 16px #6366f122;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.userAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.userName {
+  font-size: 11px;
+  color: #a5b4fc;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Template card */
+.templateCard {
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--c-surface);
+}
+
+.templateHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.templatePre {
+  color: var(--c-muted);
+  white-space: pre-wrap;
+  background: var(--c-bg);
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 100px;
+  overflow: auto;
+  margin: 0;
+}

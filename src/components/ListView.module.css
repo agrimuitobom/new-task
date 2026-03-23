@@ -1,0 +1,46 @@
+.wrapper { max-width: 800px; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead tr { border-bottom: 2px solid var(--c-border); }
+
+.table th {
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--c-muted);
+  font-weight: 700;
+}
+
+.table td { padding: 10px; }
+
+.row {
+  border-bottom: 1px solid var(--c-border-light);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.row:hover { background: #faf9f6; }
+.rowSelected { background: var(--c-indigo-bg) !important; }
+
+.nameCell {
+  font-weight: 600;
+  color: var(--c-text);
+  font-family: var(--font-heading);
+}
+
+.statusBadge {
+  border-radius: 6px;
+  padding: 2px 9px;
+  font-weight: 700;
+}
+
+.taskCount { color: var(--c-muted); }
+
+.empty {
+  text-align: center;
+  color: #cbd5e1;
+  padding: 40px;
+}
