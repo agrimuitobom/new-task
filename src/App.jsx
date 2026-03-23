@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { auth, googleProvider } from "./firebase";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
 
 import { FONT_SCALES, STATUSES, DOC_TEMPLATES, daysUntil } from "./constants";
 import { CaseProvider, useCases } from "./store/CaseContext";
@@ -21,11 +21,24 @@ export default function App() {
     return unsub;
   }, []);
 
+  // Handle redirect result (for mobile login)
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
+
   if (authLoading) {
     return <div className={s.loginPage}><div style={{ color: "#64748b" }}>読み込み中…</div></div>;
   }
   if (!user) {
-    return <LoginPage onLogin={() => signInWithPopup(auth, googleProvider).catch(console.error)} />;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const handleLogin = () => {
+      if (isMobile) {
+        signInWithRedirect(auth, googleProvider).catch(console.error);
+      } else {
+        signInWithPopup(auth, googleProvider).catch(console.error);
+      }
+    };
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (
@@ -75,7 +88,7 @@ function AppShell({ user, onLogout }) {
 
   // ── Notifications ──
   const checkAndNotify = useCallback((caseList) => {
-    if (Notification.permission !== "granted") return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
     const urgent = caseList.filter((c) => c.status !== "done" && daysUntil(c.deadline) !== null && daysUntil(c.deadline) <= 3);
     if (!urgent.length) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -103,7 +116,7 @@ function AppShell({ user, onLogout }) {
   }, [cases, checkAndNotify]);
 
   useEffect(() => {
-    if (Notification.permission !== "granted") return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
     const iv = setInterval(() => checkAndNotify(cases), 30 * 60 * 1000);
     return () => clearInterval(iv);
   }, [cases, checkAndNotify]);
