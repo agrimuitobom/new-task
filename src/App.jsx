@@ -424,8 +424,8 @@ export default function App() {
           )}
           <button onClick={undo} title="元に戻す (Ctrl+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↩</button>
           <button onClick={redo} title="やり直す (Ctrl+Shift+Z)" style={btnStyle("#312e81", "#a5b4fc")}>↪</button>
-          <button onClick={cycleFontScale} title="文字サイズ変更" style={btnStyle("#312e81", "#a5b4fc")}>
-            文字{FONT_SCALES.find((s) => s.value === fontScale)?.label || "中"}
+          <button onClick={cycleFontScale} title="文字サイズ変更" style={{ ...btnStyle("#4f46e5", "#fff"), border: "1px solid #818cf8", minWidth: 50 }}>
+            Aa {FONT_SCALES.find((s) => s.value === fontScale)?.label || "中"}
           </button>
           <div style={{ position: "relative" }}>
             <button onClick={() => setShowDataMenu((v) => !v)} style={btnStyle("#312e81", "#a5b4fc")}>💾 データ</button>
