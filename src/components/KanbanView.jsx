@@ -1,8 +1,11 @@
 import { useState, useRef } from "react";
-import { STATUSES, FONT_HEADING } from "../constants";
+import { STATUSES } from "../constants";
+import { useUI } from "../store/UIContext";
 import DeadlineBadge from "./DeadlineBadge";
+import s from "./KanbanView.module.css";
 
-export default function KanbanView({ fs, cases, onSelect, selectedId, onStatusChange, onReorder }) {
+export default function KanbanView({ cases, onSelect, selectedId, onStatusChange, onReorder }) {
+  const { fs } = useUI();
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const dragSourceRef = useRef(null);
@@ -16,18 +19,13 @@ export default function KanbanView({ fs, cases, onSelect, selectedId, onStatusCh
     e.preventDefault();
     const caseId = e.dataTransfer.getData("text/plain");
     if (!caseId) return;
-
     const sourceCase = cases.find((c) => c.id === caseId);
     if (!sourceCase) return;
-
     if (sourceCase.status !== statusId) {
-      // ステータス変更 + 挿入位置指定
       onStatusChange(caseId, statusId, index);
     } else if (index !== undefined) {
-      // 同一列内の並び替え
       onReorder(caseId, statusId, index);
     }
-
     setDragOverStatus(null);
     setDragOverIndex(null);
     dragSourceRef.current = null;
@@ -38,36 +36,35 @@ export default function KanbanView({ fs, cases, onSelect, selectedId, onStatusCh
   }
 
   return (
-    <div className="kanban-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, alignItems: "start" }}>
-      {STATUSES.map((s) => {
-        const cols = cases.filter((c) => c.status === s.id);
-        const isOver = dragOverStatus === s.id;
+    <div className={`${s.grid} kanban-grid`}>
+      {STATUSES.map((st) => {
+        const cols = cases.filter((c) => c.status === st.id);
+        const isOver = dragOverStatus === st.id;
         return (
-          <div key={s.id} className="kanban-column"
-            onDragOver={(e) => handleDragOver(e, s.id, cols.length)}
-            onDrop={(e) => handleDrop(e, s.id, dragOverIndex !== null ? dragOverIndex : cols.length)}
+          <div key={st.id} className={`${s.column} kanban-column ${isOver ? s.columnOver : ""}`}
+            onDragOver={(e) => handleDragOver(e, st.id, cols.length)}
+            onDrop={(e) => handleDrop(e, st.id, dragOverIndex ?? cols.length)}
             onDragLeave={handleDragLeave}
-            style={{ borderRadius: 10, padding: 6, minHeight: 80, transition: "background 0.15s",
-              background: isOver ? s.bg : "transparent", border: isOver ? `2px dashed ${s.color}44` : "2px dashed transparent" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-              <div style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot }} />
-              <span style={{ fontWeight: 700, color: s.color, fontSize: fs(13), fontFamily: FONT_HEADING, letterSpacing: "0.03em" }}>{s.label}</span>
-              <span style={{ background: s.bg, color: s.color, borderRadius: 10, padding: "0 6px", fontSize: fs(12), fontWeight: 700 }}>{cols.length}</span>
+            style={{ background: isOver ? st.bg : undefined, borderColor: isOver ? `${st.color}44` : undefined }}>
+            <div className={s.columnHeader}>
+              <div className={s.dot} style={{ background: st.dot }} />
+              <span style={{ fontWeight: 700, color: st.color, fontSize: fs(13), fontFamily: "var(--font-heading)", letterSpacing: "0.03em" }}>{st.label}</span>
+              <span className={s.badge} style={{ background: st.bg, color: st.color, fontSize: fs(12) }}>{cols.length}</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div className={s.cards}>
               {cols.map((c, i) => (
                 <CaseCard key={c.id} c={c} fs={fs}
                   onClick={() => onSelect(c.id)}
                   isSelected={selectedId === c.id}
                   onStatusChange={onStatusChange}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverStatus(s.id); setDragOverIndex(i); }}
-                  onDrop={(e) => { e.stopPropagation(); handleDrop(e, s.id, i); }}
-                  isDragOver={dragOverStatus === s.id && dragOverIndex === i}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverStatus(st.id); setDragOverIndex(i); }}
+                  onDrop={(e) => { e.stopPropagation(); handleDrop(e, st.id, i); }}
+                  isDragOver={dragOverStatus === st.id && dragOverIndex === i}
                   onDragStart={() => { dragSourceRef.current = c.id; }}
                 />
               ))}
               {cols.length === 0 && (
-                <div style={{ textAlign: "center", color: "#cbd5e1", fontSize: fs(12), padding: "16px 0" }}>
+                <div className={s.emptyCol} style={{ fontSize: fs(12) }}>
                   {isOver ? "ここにドロップ" : "なし"}
                 </div>
               )}
@@ -88,31 +85,26 @@ function CaseCard({ c, fs, onClick, isSelected, onStatusChange, onDragOver, onDr
       onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; onDragStart?.(); }}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onClick={onClick} style={{
-      background: "#fff", borderRadius: 12, padding: "11px 13px", cursor: "grab",
-      border: isSelected ? "2px solid #6366f1" : isDragOver ? "2px solid #6366f144" : "2px solid transparent",
-      borderTop: isDragOver ? "3px solid #6366f1" : undefined,
-      boxShadow: isSelected ? "0 0 0 3px #6366f122" : "0 1px 6px #0000000a, 0 1px 2px #0000000a",
-      transition: "box-shadow 0.2s, border-color 0.2s",
-    }}>
-      <div style={{ fontWeight: 700, color: "#1e1b4b", fontSize: fs(14), marginBottom: 5, fontFamily: FONT_HEADING }}>{c.name}</div>
+      onClick={onClick}
+      className={`${s.card} ${isSelected ? s.cardSelected : ""} ${isDragOver ? s.cardDragOver : ""}`}>
+      <div className={s.cardTitle} style={{ fontSize: fs(14) }}>{c.name}</div>
       {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} fs={fs} /></div>}
       {total > 0 && (
         <div style={{ marginBottom: 7 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: fs(11), color: "#94a3b8", marginBottom: 2 }}>
+          <div className={s.progressRow} style={{ fontSize: fs(11) }}>
             <span>タスク</span><span>{done}/{total}</span>
           </div>
-          <div style={{ height: 3, background: "#f1f5f9", borderRadius: 4 }}>
-            <div style={{ height: 3, background: "#6366f1", borderRadius: 4, width: `${total ? (done / total) * 100 : 0}%` }} />
+          <div className={s.progressTrack}>
+            <div className={s.progressFill} style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
           </div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-        {STATUSES.map((s) => (
-          <button key={s.id} onClick={(e) => { e.stopPropagation(); onStatusChange(c.id, s.id); }}
-            style={{ padding: "2px 7px", fontSize: fs(11), borderRadius: 5, border: "none", cursor: "pointer", fontWeight: 600,
-              background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8" }}>
-            {s.label}
+      <div className={s.statusButtons}>
+        {STATUSES.map((st) => (
+          <button key={st.id} onClick={(e) => { e.stopPropagation(); onStatusChange(c.id, st.id); }}
+            className={s.statusBtn}
+            style={{ fontSize: fs(11), background: c.status === st.id ? st.bg : "#f1f5f9", color: c.status === st.id ? st.color : "#94a3b8" }}>
+            {st.label}
           </button>
         ))}
       </div>

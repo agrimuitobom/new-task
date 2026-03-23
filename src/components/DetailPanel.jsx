@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { STATUSES, TASK_TEMPLATES, FONT_HEADING, FONT_BODY } from "../constants";
-import { labelStyleFn, btnStyle } from "../styles";
+import { STATUSES, TASK_TEMPLATES, genId } from "../constants";
+import { useUI } from "../store/UIContext";
+import { useCases } from "../store/CaseContext";
 import DeadlineBadge from "./DeadlineBadge";
+import s from "./DetailPanel.module.css";
 
-export default function DetailPanel({ fs, c, onUpdate, onDelete, onClose, onAddTask, onToggleTask, onUpdateTask, onDeleteTask, onReorderTasks }) {
+export default function DetailPanel({ c, onClose }) {
+  const { fs } = useUI();
+  const { dispatch } = useCases();
+  const caseId = c.id;
+
   const [newTask, setNewTask] = useState("");
   const [editName, setEditName] = useState(false);
   const [nameVal, setNameVal] = useState(c.name);
@@ -13,137 +19,239 @@ export default function DetailPanel({ fs, c, onUpdate, onDelete, onClose, onAddT
 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
+  function onUpdate(patch) { dispatch({ type: "UPDATE", id: caseId, patch }); }
+  function onAddTask(label) { dispatch({ type: "ADD_TASK", caseId, label }); }
+  function onToggleTask(taskId) { dispatch({ type: "TOGGLE_TASK", caseId, taskId }); }
+  function onUpdateTask(taskId, patch) { dispatch({ type: "UPDATE_TASK", caseId, taskId, patch }); }
+  function onDeleteTask(taskId) { dispatch({ type: "DELETE_TASK", caseId, taskId }); }
+
   function handleTaskDragStart(e, idx) {
     dragSrcIdx.current = idx;
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(idx));
   }
-  function handleTaskDragOver(e, idx) {
-    e.preventDefault();
-    setDragOverIdx(idx);
-  }
+  function handleTaskDragOver(e, idx) { e.preventDefault(); setDragOverIdx(idx); }
   function handleTaskDrop(e, toIdx) {
     e.preventDefault();
     const fromIdx = dragSrcIdx.current;
     if (fromIdx !== null && fromIdx !== toIdx) {
-      onReorderTasks(fromIdx, toIdx);
+      dispatch({ type: "REORDER_TASKS", caseId, fromIdx, toIdx });
     }
     dragSrcIdx.current = null;
     setDragOverIdx(null);
   }
-  function handleTaskDragEnd() {
-    dragSrcIdx.current = null;
-    setDragOverIdx(null);
-  }
+  function handleTaskDragEnd() { dragSrcIdx.current = null; setDragOverIdx(null); }
 
   return (
-    <div className="detail-panel" style={{ width: 300, background: "#fff", borderLeft: "1px solid #e2e8f0", padding: 18, overflow: "auto", flexShrink: 0, fontFamily: FONT_BODY }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+    <div className={`${s.panel} detail-panel`}>
+      {/* Title */}
+      <div className={s.header}>
         {editName ? (
           <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
             onBlur={() => { onUpdate({ name: nameVal }); setEditName(false); }} autoFocus
-            style={{ fontSize: fs(15), fontWeight: 700, color: "#1e1b4b", border: "none", borderBottom: "2px solid #6366f1", outline: "none", width: "100%" }} />
+            className={s.editInput} style={{ fontSize: fs(15) }} />
         ) : (
-          <div style={{ fontWeight: 700, fontSize: fs(15), color: "#1e1b4b", cursor: "pointer", flex: 1, fontFamily: FONT_HEADING }} onClick={() => setEditName(true)}>
-            {c.name} <span style={{ fontSize: fs(10), color: "#94a3b8" }}>✏</span>
+          <div className={s.caseName} style={{ fontSize: fs(15) }} onClick={() => setEditName(true)}>
+            {c.name} <span style={{ fontSize: fs(10), color: "var(--c-faint)" }}>✏</span>
           </div>
         )}
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: 0, marginLeft: 8 }}>×</button>
+        <button onClick={onClose} className={s.closeBtn}>×</button>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>ステータス</label>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {STATUSES.map((s) => (
-            <button key={s.id} onClick={() => onUpdate({ status: s.id })}
-              style={{ padding: "4px 10px", fontSize: fs(12), borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700,
-                background: c.status === s.id ? s.bg : "#f1f5f9", color: c.status === s.id ? s.color : "#94a3b8",
-                boxShadow: c.status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
-              {s.label}
+      {/* Status */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>ステータス</label>
+        <div className={s.statusBtns}>
+          {STATUSES.map((st) => (
+            <button key={st.id} onClick={() => onUpdate({ status: st.id })} className={s.statusBtn}
+              style={{ fontSize: fs(12), background: c.status === st.id ? st.bg : "#f1f5f9", color: c.status === st.id ? st.color : "#94a3b8",
+                boxShadow: c.status === st.id ? `0 0 0 2px ${st.dot}88` : "none" }}>
+              {st.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>開始日</label>
+      {/* Start date */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>開始日</label>
         <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
-          style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
+          className={s.dateInput} style={{ fontSize: fs(13) }} />
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>期限</label>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Deadline */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>期限</label>
+        <div className={s.dateRow}>
           <input type="date" value={c.deadline || ""} onChange={(e) => onUpdate({ deadline: e.target.value })}
-            style={{ border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), color: "#1e1b4b", outline: "none" }} />
+            className={s.dateInput} style={{ fontSize: fs(13) }} />
           <DeadlineBadge date={c.deadline} fs={fs} />
         </div>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleFn(fs)}>タスク ({c.tasks.filter(t=>t.done).length}/{c.tasks.length})</label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 7 }}>
+      {/* Tasks */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>タスク ({c.tasks.filter((t) => t.done).length}/{c.tasks.length})</label>
+        <div className={s.taskList}>
           {c.tasks.map((t, idx) => (
-            <div key={t.id}
-              draggable
-              onDragStart={(e) => handleTaskDragStart(e, idx)}
-              onDragOver={(e) => handleTaskDragOver(e, idx)}
-              onDrop={(e) => handleTaskDrop(e, idx)}
+            <TaskItem key={t.id} t={t} idx={idx} fs={fs} caseId={caseId}
+              dragOverIdx={dragOverIdx}
+              onDragStart={handleTaskDragStart}
+              onDragOver={handleTaskDragOver}
+              onDrop={handleTaskDrop}
               onDragEnd={handleTaskDragEnd}
-              style={{
-                border: "1px solid #f1f5f9", borderRadius: 8, padding: "6px 8px",
-                background: t.done ? "#f8f7f4" : "#fff",
-                borderTop: dragOverIdx === idx ? "3px solid #6366f1" : undefined,
-                cursor: "grab", transition: "border-top 0.1s",
-              }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: "#cbd5e1", fontSize: 10, cursor: "grab", userSelect: "none" }}>⠿</span>
-                <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t.id)}
-                  style={{ accentColor: "#6366f1", width: 14, height: 14, cursor: "pointer" }} />
-                <span style={{ flex: 1, fontSize: fs(13), color: t.done ? "#94a3b8" : "#1e1b4b", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                <button onClick={() => onDeleteTask(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 14, padding: 0 }}>×</button>
-              </div>
-              <div style={{ display: "flex", gap: 4, marginTop: 4, marginLeft: 20 }}>
-                <input type="date" value={t.startDate || ""} onChange={(e) => onUpdateTask(t.id, { startDate: e.target.value })}
-                  title="開始日"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
-                <span style={{ fontSize: fs(11), color: "#cbd5e1", lineHeight: "24px" }}>→</span>
-                <input type="date" value={t.deadline || ""} onChange={(e) => onUpdateTask(t.id, { deadline: e.target.value })}
-                  title="期限"
-                  style={{ border: "1px solid #e2e8f0", borderRadius: 5, padding: "2px 5px", fontSize: fs(11), color: "#64748b", outline: "none", width: 115 }} />
-              </div>
-            </div>
+              onToggle={() => onToggleTask(t.id)}
+              onDelete={() => onDeleteTask(t.id)}
+              onUpdateTask={(patch) => onUpdateTask(t.id, patch)}
+            />
           ))}
         </div>
-        <div style={{ marginBottom: 6, display: "flex", flexWrap: "wrap", gap: 3 }}>
+        <div className={s.quickAdd}>
           {TASK_TEMPLATES.map((tl) => (
-            <button key={tl} onClick={() => onAddTask(tl)}
-              style={{ fontSize: fs(11), padding: "2px 7px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#faf9f6", color: "#64748b", cursor: "pointer" }}>
+            <button key={tl} onClick={() => onAddTask(tl)} className={s.quickAddBtn} style={{ fontSize: fs(11) }}>
               + {tl}
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 5 }}>
+        <div className={s.addRow}>
           <input value={newTask} onChange={(e) => setNewTask(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
-            placeholder="タスクを入力… Enter"
-            style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 7, padding: "5px 9px", fontSize: fs(13), outline: "none" }} />
+            placeholder="タスクを入力… Enter" className={s.addInput} style={{ fontSize: fs(13) }} />
           <button onClick={() => { if (newTask.trim()) { onAddTask(newTask.trim()); setNewTask(""); } }}
-            style={btnStyle("#6366f1", "#fff")}>追加</button>
+            className={s.addBtn} style={{ fontSize: 13 }}>追加</button>
         </div>
       </div>
 
+      {/* Note */}
       <div style={{ marginBottom: 18 }}>
-        <label style={labelStyleFn(fs)}>メモ</label>
+        <label className={s.label} style={{ fontSize: fs(11) }}>メモ</label>
         <textarea value={noteVal} onChange={(e) => setNoteVal(e.target.value)} onBlur={() => onUpdate({ note: noteVal })}
-          rows={4} placeholder="案件に関するメモ…"
-          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 7, padding: "7px 9px", fontSize: fs(13), color: "#1e1b4b", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+          rows={4} placeholder="案件に関するメモ…" className={s.noteArea} style={{ fontSize: fs(13) }} />
       </div>
 
-      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) onDelete(); }}
-        style={{ background: "#fef2f2", color: "#dc2626", border: "none", borderRadius: 8, padding: "8px", fontSize: fs(13), fontWeight: 700, cursor: "pointer", width: "100%" }}>
+      {/* Delete */}
+      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) dispatch({ type: "DELETE", id: caseId }); onClose(); }}
+        className={s.deleteBtn} style={{ fontSize: fs(13) }}>
         🗑 この案件を削除
       </button>
+    </div>
+  );
+}
+
+/* ── Task item with comments & attachments ── */
+function TaskItem({ t, idx, fs, caseId, dragOverIdx, onDragStart, onDragOver, onDrop, onDragEnd, onToggle, onDelete, onUpdateTask }) {
+  const { dispatch } = useCases();
+  const [commentText, setCommentText] = useState("");
+  const [showDetail, setShowDetail] = useState(false);
+  const fileRef = useRef(null);
+
+  const comments = t.comments || [];
+  const attachments = t.attachments || [];
+
+  function addComment() {
+    if (!commentText.trim()) return;
+    dispatch({ type: "ADD_COMMENT", caseId, taskId: t.id, text: commentText.trim() });
+    setCommentText("");
+  }
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("5MB以下のファイルを選択してください"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      dispatch({ type: "ADD_ATTACHMENT", caseId, taskId: t.id, name: file.name, size: file.size, type: file.type, dataUrl: ev.target.result });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / 1048576).toFixed(1)}MB`;
+  }
+
+  function formatTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, idx)}
+      onDragOver={(e) => onDragOver(e, idx)}
+      onDrop={(e) => onDrop(e, idx)}
+      onDragEnd={onDragEnd}
+      className={`${s.taskItem} ${t.done ? s.taskDone : ""} ${dragOverIdx === idx ? s.taskDragOver : ""}`}>
+      <div className={s.taskRow}>
+        <span className={s.dragHandle}>⠿</span>
+        <input type="checkbox" checked={t.done} onChange={onToggle} className={s.taskCheckbox} />
+        <span className={`${s.taskLabel} ${t.done ? s.taskLabelDone : ""}`} style={{ fontSize: fs(13), color: t.done ? undefined : "var(--c-text)" }}>
+          {t.label}
+        </span>
+        <button onClick={() => setShowDetail((v) => !v)}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 11, padding: 0, flexShrink: 0 }}
+          title="コメント・添付">
+          {(comments.length > 0 || attachments.length > 0) ? `💬${comments.length + attachments.length}` : "💬"}
+        </button>
+        <button onClick={onDelete} className={s.taskDeleteBtn}>×</button>
+      </div>
+
+      {/* Task dates */}
+      <div className={s.taskDates}>
+        <input type="date" value={t.startDate || ""} onChange={(e) => onUpdateTask({ startDate: e.target.value })}
+          title="開始日" className={s.taskDateInput} style={{ fontSize: fs(11) }} />
+        <span className={s.taskDateArrow} style={{ fontSize: fs(11) }}>→</span>
+        <input type="date" value={t.deadline || ""} onChange={(e) => onUpdateTask({ deadline: e.target.value })}
+          title="期限" className={s.taskDateInput} style={{ fontSize: fs(11) }} />
+      </div>
+
+      {/* Comments & Attachments (collapsible) */}
+      {showDetail && (
+        <div className={s.commentSection}>
+          {/* Attachments */}
+          {attachments.length > 0 && (
+            <div className={s.attachmentList}>
+              {attachments.map((a) => (
+                <div key={a.id} className={s.attachmentItem}>
+                  <a href={a.dataUrl} download={a.name} className={s.attachmentLink} style={{ fontSize: fs(11) }} title={a.name}>
+                    📎 {a.name}
+                  </a>
+                  <span className={s.attachmentSize} style={{ fontSize: fs(10) }}>{formatSize(a.size)}</span>
+                  <button onClick={() => dispatch({ type: "DELETE_ATTACHMENT", caseId, taskId: t.id, attachmentId: a.id })}
+                    className={s.attachmentDeleteBtn}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={() => fileRef.current?.click()} className={s.attachBtn} style={{ fontSize: fs(11), marginBottom: 4 }}>
+            📎 ファイル添付
+          </button>
+          <input ref={fileRef} type="file" onChange={handleFile} style={{ display: "none" }} />
+
+          {/* Comments */}
+          {comments.length > 0 && (
+            <div className={s.commentList}>
+              {comments.map((cm) => (
+                <div key={cm.id} className={s.commentItem}>
+                  <span className={s.commentText} style={{ fontSize: fs(11) }}>{cm.text}</span>
+                  <span className={s.commentTime} style={{ fontSize: fs(9) }}>{formatTime(cm.createdAt)}</span>
+                  <button onClick={() => dispatch({ type: "DELETE_COMMENT", caseId, taskId: t.id, commentId: cm.id })}
+                    className={s.commentDeleteBtn}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input value={commentText} onChange={(e) => setCommentText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addComment(); }}
+            placeholder="コメント… Enter" className={s.commentInput} style={{ fontSize: fs(11) }} />
+        </div>
+      )}
     </div>
   );
 }

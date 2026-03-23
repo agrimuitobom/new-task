@@ -1,0 +1,111 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.column {
+  border-radius: 10px;
+  padding: 6px;
+  min-height: 80px;
+  transition: background 0.15s;
+  border: 2px dashed transparent;
+}
+
+.columnOver {
+  border-style: dashed;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.badge {
+  border-radius: 10px;
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.emptyCol {
+  text-align: center;
+  color: #cbd5e1;
+  padding: 16px 0;
+}
+
+/* ── CaseCard ── */
+.card {
+  background: var(--c-surface);
+  border-radius: 12px;
+  padding: 11px 13px;
+  cursor: grab;
+  border: 2px solid transparent;
+  box-shadow: 0 1px 6px #0000000a, 0 1px 2px #0000000a;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.card:active { cursor: grabbing; }
+
+.cardSelected {
+  border-color: var(--c-indigo);
+  box-shadow: 0 0 0 3px #6366f122;
+}
+
+.cardDragOver {
+  border-top: 3px solid var(--c-indigo);
+}
+
+.cardTitle {
+  font-weight: 700;
+  color: var(--c-text);
+  margin-bottom: 5px;
+  font-family: var(--font-heading);
+}
+
+.progressRow {
+  display: flex;
+  justify-content: space-between;
+  color: var(--c-faint);
+  margin-bottom: 2px;
+}
+
+.progressTrack {
+  height: 3px;
+  background: var(--c-border-light);
+  border-radius: 4px;
+}
+
+.progressFill {
+  height: 3px;
+  background: var(--c-indigo);
+  border-radius: 4px;
+}
+
+.statusButtons {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.statusBtn {
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}

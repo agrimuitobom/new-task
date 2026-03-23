@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { STATUSES, FONT_HEADING, FONT_BODY } from "../constants";
-import { labelStyleFn, inputStyleFn, btnStyle } from "../styles";
+import { STATUSES } from "../constants";
+import { useUI } from "../store/UIContext";
+import s from "./Modal.module.css";
 
 export function Modal({ onClose, title, children }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000050", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: 440, maxWidth: "95vw", maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px #00000025, 0 4px 16px #0000000f", fontFamily: FONT_BODY }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "#1e1b4b", fontFamily: FONT_HEADING }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>×</button>
+    <div className={s.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={s.dialog}>
+        <div className={s.header}>
+          <span className={s.title}>{title}</span>
+          <button onClick={onClose} className={s.closeBtn}>×</button>
         </div>
         {children}
       </div>
@@ -17,9 +17,10 @@ export function Modal({ onClose, title, children }) {
   );
 }
 
-export function NewCaseModal({ fs, onAdd, onClose }) {
-  const [name, setName]       = useState("");
-  const [status, setStatus]   = useState("draft");
+export function NewCaseModal({ onAdd, onClose }) {
+  const { fs } = useUI();
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState("draft");
   const [deadline, setDeadline] = useState("");
 
   function submit() {
@@ -30,32 +31,33 @@ export function NewCaseModal({ fs, onAdd, onClose }) {
 
   return (
     <Modal onClose={onClose} title="＋ 新規案件">
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className={s.form}>
         <div>
-          <label style={labelStyleFn(fs)}>案件名 *</label>
+          <label className={s.inputLabel} style={{ fontSize: fs(11) }}>案件名 *</label>
           <input value={name} onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
-            placeholder="例：〇〇事業補助金申請" style={inputStyleFn(fs)} />
+            placeholder="例：〇〇事業補助金申請" className={s.textInput} style={{ fontSize: fs(14) }} />
         </div>
         <div>
-          <label style={labelStyleFn(fs)}>初期ステータス</label>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {STATUSES.map((s) => (
-              <button key={s.id} onClick={() => setStatus(s.id)}
-                style={{ padding: "4px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontWeight: 700, fontSize: fs(13),
-                  background: status === s.id ? s.bg : "#f1f5f9", color: status === s.id ? s.color : "#94a3b8",
-                  boxShadow: status === s.id ? `0 0 0 2px ${s.dot}88` : "none" }}>
-                {s.label}
+          <label className={s.inputLabel} style={{ fontSize: fs(11) }}>初期ステータス</label>
+          <div className={s.statusOptions}>
+            {STATUSES.map((st) => (
+              <button key={st.id} onClick={() => setStatus(st.id)} className={s.statusOption}
+                style={{ fontSize: fs(13),
+                  background: status === st.id ? st.bg : "#f1f5f9",
+                  color: status === st.id ? st.color : "#94a3b8",
+                  boxShadow: status === st.id ? `0 0 0 2px ${st.dot}88` : "none" }}>
+                {st.label}
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label style={labelStyleFn(fs)}>期限（任意）</label>
-          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={inputStyleFn(fs)} />
+          <label className={s.inputLabel} style={{ fontSize: fs(11) }}>期限（任意）</label>
+          <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)}
+            className={s.textInput} style={{ fontSize: fs(14) }} />
         </div>
-        <button onClick={submit}
-          style={{ background: "linear-gradient(135deg, #6366f1, #818cf8)", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: fs(15), fontWeight: 700, cursor: "pointer", marginTop: 4, fontFamily: FONT_HEADING, letterSpacing: "0.05em", boxShadow: "0 2px 8px #6366f133" }}>
+        <button onClick={submit} className={s.submitBtn} style={{ fontSize: fs(15) }}>
           作成する
         </button>
       </div>

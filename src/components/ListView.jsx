@@ -1,35 +1,38 @@
-import { STATUSES, FONT_HEADING } from "../constants";
+import { STATUSES } from "../constants";
+import { useUI } from "../store/UIContext";
 import DeadlineBadge from "./DeadlineBadge";
+import s from "./ListView.module.css";
 
-export default function ListView({ fs, cases, onSelect, selectedId }) {
+export default function ListView({ cases, onSelect, selectedId }) {
+  const { fs } = useUI();
   return (
-    <div style={{ maxWidth: 800 }}>
-      <table className="list-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div className={s.wrapper}>
+      <table className={`${s.table} list-table`}>
         <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+          <tr>
             {["案件名", "ステータス", "期限", "タスク"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: fs(12), color: "#64748b", fontWeight: 700 }}>{h}</th>
+              <th key={h} style={{ fontSize: fs(12) }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {cases.map((c) => {
-            const st = STATUSES.find((s) => s.id === c.status);
+            const st = STATUSES.find((sv) => sv.id === c.status);
             const done = c.tasks.filter((t) => t.done).length;
             return (
               <tr key={c.id} onClick={() => onSelect(c.id)}
-                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: selectedId === c.id ? "#eef2ff" : "transparent" }}>
-                <td style={{ padding: "10px", fontWeight: 600, color: "#1e1b4b", fontSize: fs(14), fontFamily: FONT_HEADING }}>{c.name}</td>
-                <td style={{ padding: "10px" }}>
-                  <span style={{ background: st?.bg, color: st?.color, borderRadius: 6, padding: "2px 9px", fontSize: fs(12), fontWeight: 700 }}>{st?.label}</span>
+                className={`${s.row} ${selectedId === c.id ? s.rowSelected : ""}`}>
+                <td className={s.nameCell} style={{ fontSize: fs(14) }}>{c.name}</td>
+                <td>
+                  <span className={s.statusBadge} style={{ background: st?.bg, color: st?.color, fontSize: fs(12) }}>{st?.label}</span>
                 </td>
-                <td style={{ padding: "10px" }}><DeadlineBadge date={c.deadline} fs={fs} /></td>
-                <td style={{ padding: "10px", fontSize: fs(13), color: "#64748b" }}>{c.tasks.length > 0 ? `${done}/${c.tasks.length}` : "—"}</td>
+                <td><DeadlineBadge date={c.deadline} fs={fs} /></td>
+                <td className={s.taskCount} style={{ fontSize: fs(13) }}>{c.tasks.length > 0 ? `${done}/${c.tasks.length}` : "—"}</td>
               </tr>
             );
           })}
           {cases.length === 0 && (
-            <tr><td colSpan={4} style={{ textAlign: "center", color: "#cbd5e1", padding: 40, fontSize: fs(13) }}>案件がありません</td></tr>
+            <tr><td colSpan={4} className={s.empty} style={{ fontSize: fs(13) }}>案件がありません</td></tr>
           )}
         </tbody>
       </table>

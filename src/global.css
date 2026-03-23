@@ -1,0 +1,42 @@
+:root {
+  --font-heading: 'Shippori Mincho B1', 'Hiragino Mincho ProN', serif;
+  --font-body: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --c-bg: #faf9f6;
+  --c-text: #1e1b4b;
+  --c-muted: #64748b;
+  --c-faint: #94a3b8;
+  --c-border: #e2e8f0;
+  --c-border-light: #f1f5f9;
+  --c-surface: #fff;
+  --c-indigo: #6366f1;
+  --c-indigo-bg: #eef2ff;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); background: var(--c-bg); color: var(--c-text); }
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  .app-header { height: auto !important; padding: 8px 12px !important; }
+  .app-header-buttons { gap: 4px !important; }
+  .app-header-buttons button { padding: 5px 8px !important; font-size: 11px !important; }
+  .search-bar { padding: 8px 12px !important; gap: 6px !important; }
+  .search-bar input { min-width: 100px !important; font-size: 12px !important; }
+  .filter-buttons { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .filter-buttons button { white-space: nowrap; font-size: 10px !important; padding: 3px 7px !important; }
+  .main-content { flex-direction: column !important; }
+  .kanban-grid { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; gap: 12px !important; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+  .kanban-column { min-width: 220px !important; flex-shrink: 0 !important; scroll-snap-align: start; }
+  .detail-panel { width: 100% !important; border-left: none !important; border-top: 1px solid var(--c-border); max-height: 50vh; position: relative !important; }
+  .list-table { font-size: 11px !important; }
+  .list-table td, .list-table th { padding: 6px 5px !important; }
+  .gantt-wrapper { flex-direction: column !important; }
+  .gantt-left { width: 100% !important; max-height: 180px !important; border-right: none !important; border-bottom: 2px solid var(--c-border); }
+  .gantt-timeline { -webkit-overflow-scrolling: touch; }
+}
+
+@media (max-width: 480px) {
+  .kanban-column { min-width: 180px !important; }
+  .app-title { font-size: 14px !important; }
+}

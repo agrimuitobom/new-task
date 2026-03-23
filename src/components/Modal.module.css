@@ -1,0 +1,102 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: #00000050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  background: var(--c-surface);
+  border-radius: 16px;
+  padding: 24px;
+  width: 440px;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px #00000025, 0 4px 16px #0000000f;
+  font-family: var(--font-body);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--c-text);
+  font-family: var(--font-heading);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--c-faint);
+}
+
+/* NewCaseModal */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inputLabel {
+  display: block;
+  font-weight: 700;
+  color: var(--c-muted);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-body);
+}
+
+.textInput {
+  width: 100%;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  outline: none;
+  box-sizing: border-box;
+  color: var(--c-text);
+  font-family: var(--font-body);
+  transition: border-color 0.2s;
+}
+
+.textInput:focus { border-color: var(--c-indigo); }
+
+.statusOptions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.statusOption {
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.submitBtn {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+  font-family: var(--font-heading);
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px #6366f133;
+}
