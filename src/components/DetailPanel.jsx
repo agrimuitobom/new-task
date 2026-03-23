@@ -5,6 +5,18 @@ import { useCases } from "../store/CaseContext";
 import DeadlineBadge from "./DeadlineBadge";
 import s from "./DetailPanel.module.css";
 
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1048576).toFixed(1)}MB`;
+}
+
 export default function DetailPanel({ c, onClose }) {
   const { fs } = useUI();
   const { dispatch } = useCases();
@@ -15,6 +27,8 @@ export default function DetailPanel({ c, onClose }) {
   const [nameVal, setNameVal] = useState(c.name);
   const [noteVal, setNoteVal] = useState(c.note || "");
   const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [commentText, setCaseComment] = useState("");
+  const caseFileRef = useRef(null);
   const dragSrcIdx = useRef(null);
 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
@@ -123,14 +137,76 @@ export default function DetailPanel({ c, onClose }) {
       </div>
 
       {/* Note */}
-      <div style={{ marginBottom: 18 }}>
+      <div className={s.section}>
         <label className={s.label} style={{ fontSize: fs(11) }}>メモ</label>
         <textarea value={noteVal} onChange={(e) => setNoteVal(e.target.value)} onBlur={() => onUpdate({ note: noteVal })}
-          rows={4} placeholder="案件に関するメモ…" className={s.noteArea} style={{ fontSize: fs(13) }} />
+          rows={3} placeholder="案件に関するメモ…" className={s.noteArea} style={{ fontSize: fs(13) }} />
+      </div>
+
+      {/* Attachments */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>添付ファイル ({(c.attachments || []).length})</label>
+        {(c.attachments || []).length > 0 && (
+          <div className={s.caseAttachList}>
+            {(c.attachments || []).map((a) => (
+              <div key={a.id} className={s.caseAttachItem}>
+                <a href={a.dataUrl} download={a.name} className={s.caseAttachLink} style={{ fontSize: fs(12) }}>
+                  {a.type?.startsWith("image/") ? "🖼" : "📎"} {a.name}
+                </a>
+                <span className={s.caseAttachMeta} style={{ fontSize: fs(10) }}>{formatSize(a.size)}</span>
+                <button onClick={() => dispatch({ type: "DELETE_CASE_ATTACHMENT", caseId, attachmentId: a.id })}
+                  className={s.caseAttachDelete}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={() => caseFileRef.current?.click()} className={s.caseAttachBtn} style={{ fontSize: fs(12) }}>
+          + ファイルを追加
+        </button>
+        <input ref={caseFileRef} type="file" onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) { alert("5MB以下のファイルを選択してください"); return; }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            dispatch({ type: "ADD_CASE_ATTACHMENT", caseId, name: file.name, size: file.size, type: file.type, dataUrl: ev.target.result });
+          };
+          reader.readAsDataURL(file);
+          e.target.value = "";
+        }} style={{ display: "none" }} />
+      </div>
+
+      {/* Comments */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>コメント ({(c.comments || []).length})</label>
+        {(c.comments || []).length > 0 && (
+          <div className={s.caseCommentList}>
+            {(c.comments || []).map((cm) => (
+              <div key={cm.id} className={s.caseCommentItem}>
+                <div className={s.caseCommentBody}>
+                  <span className={s.caseCommentText} style={{ fontSize: fs(12) }}>{cm.text}</span>
+                  <span className={s.caseCommentTime} style={{ fontSize: fs(10) }}>{formatTime(cm.createdAt)}</span>
+                </div>
+                <button onClick={() => dispatch({ type: "DELETE_CASE_COMMENT", caseId, commentId: cm.id })}
+                  className={s.caseCommentDelete}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className={s.caseCommentAdd}>
+          <input value={commentText} onChange={(e) => setCaseComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && commentText.trim()) {
+                dispatch({ type: "ADD_CASE_COMMENT", caseId, text: commentText.trim() });
+                setCaseComment("");
+              }
+            }}
+            placeholder="コメントを入力… Enter" className={s.caseCommentInput} style={{ fontSize: fs(12) }} />
+        </div>
       </div>
 
       {/* Delete */}
-      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) dispatch({ type: "DELETE", id: caseId }); onClose(); }}
+      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) { dispatch({ type: "DELETE", id: caseId }); onClose(); } }}
         className={s.deleteBtn} style={{ fontSize: fs(13) }}>
         🗑 この案件を削除
       </button>

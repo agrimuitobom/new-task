@@ -305,6 +305,138 @@
   transition: opacity 0.15s;
 }
 
+/* ── Case-level attachments ── */
+.caseAttachList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.caseAttachItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--c-bg);
+  border-radius: 7px;
+  border: 1px solid var(--c-border-light);
+}
+
+.caseAttachLink {
+  flex: 1;
+  color: var(--c-indigo);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.caseAttachLink:hover { text-decoration: underline; }
+
+.caseAttachMeta {
+  color: var(--c-faint);
+  flex-shrink: 0;
+}
+
+.caseAttachDelete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 14px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.caseAttachDelete:hover { color: #ef4444; }
+
+.caseAttachBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 2px dashed var(--c-border);
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--c-muted);
+  font-weight: 600;
+  font-family: var(--font-body);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.caseAttachBtn:hover {
+  border-color: var(--c-indigo);
+  color: var(--c-indigo);
+}
+
+/* ── Case-level comments ── */
+.caseCommentList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.caseCommentItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--c-bg);
+  border-radius: 7px;
+}
+
+.caseCommentBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.caseCommentText {
+  color: var(--c-text);
+  word-break: break-word;
+  display: block;
+}
+
+.caseCommentTime {
+  color: var(--c-faint);
+  display: block;
+  margin-top: 2px;
+}
+
+.caseCommentDelete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 14px;
+  padding: 0;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.caseCommentDelete:hover { color: #ef4444; }
+
+.caseCommentAdd {
+  display: flex;
+  gap: 5px;
+}
+
+.caseCommentInput {
+  flex: 1;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  outline: none;
+  color: var(--c-text);
+  font-family: var(--font-body);
+}
+
+.caseCommentInput:focus {
+  border-color: var(--c-indigo);
+}
+
 /* ── Note / Delete ── */
 .noteArea {
   width: 100%;

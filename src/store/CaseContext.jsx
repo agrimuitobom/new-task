@@ -119,6 +119,30 @@ function caseReducer(state, action) {
             }
           : c
       );
+    case "ADD_CASE_COMMENT":
+      return state.map((c) =>
+        c.id === action.caseId
+          ? { ...c, comments: [...(c.comments || []), { id: genId(), text: action.text, createdAt: new Date().toISOString() }] }
+          : c
+      );
+    case "DELETE_CASE_COMMENT":
+      return state.map((c) =>
+        c.id === action.caseId
+          ? { ...c, comments: (c.comments || []).filter((cm) => cm.id !== action.commentId) }
+          : c
+      );
+    case "ADD_CASE_ATTACHMENT":
+      return state.map((c) =>
+        c.id === action.caseId
+          ? { ...c, attachments: [...(c.attachments || []), { id: genId(), name: action.name, size: action.size, type: action.type, dataUrl: action.dataUrl, createdAt: new Date().toISOString() }] }
+          : c
+      );
+    case "DELETE_CASE_ATTACHMENT":
+      return state.map((c) =>
+        c.id === action.caseId
+          ? { ...c, attachments: (c.attachments || []).filter((a) => a.id !== action.attachmentId) }
+          : c
+      );
     default:
       return state;
   }
