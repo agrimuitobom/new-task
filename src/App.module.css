@@ -1,5 +1,7 @@
 .root {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--c-bg);
   font-family: var(--font-body);
 }
@@ -95,7 +97,9 @@
 
 .mainContent {
   display: flex;
-  height: calc(100vh - 58px - 49px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .viewArea {

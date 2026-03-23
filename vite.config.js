@@ -40,6 +40,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
+        // Firebase API calls must NOT be cached by the Service Worker
+        navigateFallbackDenylist: [/^\/__(\/|$)/, /\/__\/auth\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
@@ -56,16 +58,6 @@ export default defineConfig({
             options: {
               cacheName: 'images',
               expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
-            }
-          },
-          {
-            urlPattern: /^https:\/\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
             }
           }

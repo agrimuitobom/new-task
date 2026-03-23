@@ -172,20 +172,24 @@ export function CaseProvider({ user, authLoading, children }) {
       } catch {}
       return;
     }
-    const colRef = collection(db, "users", user.uid, "cases");
-    const unsub = onSnapshot(
-      colRef,
-      (snap) => {
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        firestoreSkipRef.current = true;
-        dispatch({ type: "SET", cases: data });
-        historyRef.current = [JSON.stringify(data)];
-        historyIndexRef.current = 0;
-        firestoreSkipRef.current = false;
-      },
-      (err) => console.error("Firestore sync error:", err)
-    );
-    return unsub;
+    try {
+      const colRef = collection(db, "users", user.uid, "cases");
+      const unsub = onSnapshot(
+        colRef,
+        (snap) => {
+          const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          firestoreSkipRef.current = true;
+          dispatch({ type: "SET", cases: data });
+          historyRef.current = [JSON.stringify(data)];
+          historyIndexRef.current = 0;
+          firestoreSkipRef.current = false;
+        },
+        (err) => console.error("Firestore sync error:", err)
+      );
+      return unsub;
+    } catch (err) {
+      console.error("Firestore init error:", err);
+    }
   }, [user, authLoading]);
 
   // Persist changes
@@ -197,11 +201,15 @@ export function CaseProvider({ user, authLoading, children }) {
       return;
     }
     if (firestoreSkipRef.current) return;
-    const colRef = collection(db, "users", user.uid, "cases");
-    cases.forEach((c) => {
-      const { id, ...data } = c;
-      setDoc(doc(colRef, id), data).catch(() => {});
-    });
+    try {
+      const colRef = collection(db, "users", user.uid, "cases");
+      cases.forEach((c) => {
+        const { id, ...data } = c;
+        setDoc(doc(colRef, id), data).catch(() => {});
+      });
+    } catch (err) {
+      console.error("Firestore write error:", err);
+    }
   }, [cases, user, authLoading, pushHistory]);
 
   // Keyboard shortcuts
