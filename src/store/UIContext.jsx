@@ -10,6 +10,8 @@ export function UIProvider({ children }) {
   const [showTemplate, setShowTemplate] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterTag, setFilterTag] = useState("all");
+  const [showArchived, setShowArchived] = useState(false);
   const [sortKey, setSortKey] = useState("deadline");
   const [fontScale, setFontScale] = useState(() => {
     try { return parseFloat(localStorage.getItem("fontScale")) || 1.15; } catch { return 1.15; }
@@ -37,6 +39,8 @@ export function UIProvider({ children }) {
     showTemplate, setShowTemplate,
     searchQuery, setSearchQuery,
     filterStatus, setFilterStatus,
+    filterTag, setFilterTag,
+    showArchived, setShowArchived,
     sortKey, setSortKey,
     fontScale, fs, cycleFontScale,
   };

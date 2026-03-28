@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { STATUSES, TASK_TEMPLATES, genId } from "../constants";
+import { STATUSES, TASK_TEMPLATES, DEFAULT_TAGS, genId } from "../constants";
 import { useUI } from "../store/UIContext";
 import { useCases } from "../store/CaseContext";
 import DeadlineBadge from "./DeadlineBadge";
@@ -28,8 +28,10 @@ export default function DetailPanel({ c, onClose }) {
   const [noteVal, setNoteVal] = useState(c.note || "");
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const [commentText, setCaseComment] = useState("");
+  const [customTag, setCustomTag] = useState("");
   const caseFileRef = useRef(null);
   const dragSrcIdx = useRef(null);
+  const tags = c.tags || [];
 
   useEffect(() => { setNameVal(c.name); setNoteVal(c.note || ""); }, [c.id]);
 
@@ -86,10 +88,44 @@ export default function DetailPanel({ c, onClose }) {
         </div>
       </div>
 
+      {/* Tags */}
+      <div className={s.section}>
+        <label className={s.label} style={{ fontSize: fs(11) }}>タグ</label>
+        <div className={s.tagList}>
+          {tags.map((tag) => (
+            <span key={tag} className={s.tag} style={{ fontSize: fs(11) }}>
+              {tag}
+              <button onClick={() => onUpdate({ tags: tags.filter((t) => t !== tag) })} className={s.tagRemove}>×</button>
+            </span>
+          ))}
+        </div>
+        <div className={s.tagAdd}>
+          {DEFAULT_TAGS.filter((t) => !tags.includes(t)).slice(0, 6).map((tag) => (
+            <button key={tag} onClick={() => onUpdate({ tags: [...tags, tag] })} className={s.tagSuggest} style={{ fontSize: fs(10) }}>
+              + {tag}
+            </button>
+          ))}
+        </div>
+        <div className={s.tagCustomRow}>
+          <input value={customTag} onChange={(e) => setCustomTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && customTag.trim() && !tags.includes(customTag.trim())) {
+                onUpdate({ tags: [...tags, customTag.trim()] });
+                setCustomTag("");
+              }
+            }}
+            placeholder="カスタムタグ… Enter" className={s.tagCustomInput} style={{ fontSize: fs(11) }} />
+        </div>
+      </div>
+
       {/* Start date */}
       <div className={s.section}>
         <label className={s.label} style={{ fontSize: fs(11) }}>開始日</label>
-        <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
+        <input type="date" value={c.startDate || ""} onChange={(e) => {
+            const patch = { startDate: e.target.value };
+            if (e.target.value && !c.deadline) patch.deadline = e.target.value;
+            onUpdate(patch);
+          }}
           className={s.dateInput} style={{ fontSize: fs(13) }} />
       </div>
 
@@ -205,11 +241,17 @@ export default function DetailPanel({ c, onClose }) {
         </div>
       </div>
 
-      {/* Delete */}
-      <button onClick={() => { if (window.confirm("この案件を削除しますか？")) { dispatch({ type: "DELETE", id: caseId }); onClose(); } }}
-        className={s.deleteBtn} style={{ fontSize: fs(13) }}>
-        🗑 この案件を削除
-      </button>
+      {/* Archive / Delete */}
+      <div className={s.section} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <button onClick={() => { onUpdate({ archived: !c.archived }); if (!c.archived) onClose(); }}
+          className={s.archiveBtn} style={{ fontSize: fs(13) }}>
+          {c.archived ? "📂 アーカイブから戻す" : "📦 アーカイブする"}
+        </button>
+        <button onClick={() => { if (window.confirm("この案件を削除しますか？")) { dispatch({ type: "DELETE", id: caseId }); onClose(); } }}
+          className={s.deleteBtn} style={{ fontSize: fs(13) }}>
+          🗑 この案件を削除
+        </button>
+      </div>
     </div>
   );
 }

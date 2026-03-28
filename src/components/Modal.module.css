@@ -87,6 +87,22 @@
   font-weight: 700;
 }
 
+.tagOptions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.tagOption {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: var(--font-body);
+  transition: background 0.15s, color 0.15s;
+}
+
 .submitBtn {
   background: linear-gradient(135deg, #6366f1, #818cf8);
   color: #fff;

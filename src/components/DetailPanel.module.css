@@ -82,6 +82,79 @@
   gap: 8px;
 }
 
+/* ── Tags ── */
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--c-indigo-bg);
+  color: var(--c-indigo);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-weight: 700;
+}
+
+.tagRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-indigo);
+  font-size: 13px;
+  padding: 0;
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.tagRemove:hover { opacity: 1; }
+
+.tagAdd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.tagSuggest {
+  background: var(--c-border-light);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  cursor: pointer;
+  color: var(--c-muted);
+  font-family: var(--font-body);
+}
+
+.tagSuggest:hover {
+  border-color: var(--c-indigo);
+  color: var(--c-indigo);
+}
+
+.tagCustomRow {
+  display: flex;
+  gap: 4px;
+}
+
+.tagCustomInput {
+  flex: 1;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  color: var(--c-text);
+  font-family: var(--font-body);
+}
+
+.tagCustomInput:focus {
+  border-color: var(--c-indigo);
+}
+
 /* ── Tasks ── */
 .taskList {
   display: flex;
@@ -447,6 +520,22 @@
   resize: vertical;
   outline: none;
   box-sizing: border-box;
+}
+
+.archiveBtn {
+  background: #f0e6d3;
+  color: #78350f;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  font-family: var(--font-body);
+}
+
+.archiveBtn:hover {
+  background: #e8d8be;
 }
 
 .deleteBtn {

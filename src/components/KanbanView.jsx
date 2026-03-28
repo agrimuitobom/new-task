@@ -88,6 +88,11 @@ function CaseCard({ c, fs, onClick, isSelected, onStatusChange, onDragOver, onDr
       onClick={onClick}
       className={`${s.card} ${isSelected ? s.cardSelected : ""} ${isDragOver ? s.cardDragOver : ""}`}>
       <div className={s.cardTitle} style={{ fontSize: fs(14) }}>{c.name}</div>
+      {(c.tags || []).length > 0 && (
+        <div className={s.cardTags}>
+          {(c.tags || []).map((tag) => <span key={tag} className={s.cardTag} style={{ fontSize: fs(9) }}>{tag}</span>)}
+        </div>
+      )}
       {c.deadline && <div style={{ marginBottom: 5 }}><DeadlineBadge date={c.deadline} fs={fs} /></div>}
       {total > 0 && (
         <div style={{ marginBottom: 7 }}>
