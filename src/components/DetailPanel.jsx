@@ -121,7 +121,11 @@ export default function DetailPanel({ c, onClose }) {
       {/* Start date */}
       <div className={s.section}>
         <label className={s.label} style={{ fontSize: fs(11) }}>開始日</label>
-        <input type="date" value={c.startDate || ""} onChange={(e) => onUpdate({ startDate: e.target.value })}
+        <input type="date" value={c.startDate || ""} onChange={(e) => {
+            const patch = { startDate: e.target.value };
+            if (e.target.value && !c.deadline) patch.deadline = e.target.value;
+            onUpdate(patch);
+          }}
           className={s.dateInput} style={{ fontSize: fs(13) }} />
       </div>
 
