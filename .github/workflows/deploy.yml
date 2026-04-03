@@ -59,7 +59,7 @@ jobs:
 
       # ── Firebase (Functions + Firestore Rules) ──
       - name: Install Firebase Functions dependencies
-        run: cd functions && npm ci
+        run: cd functions && npm install
 
       - name: Deploy to Firebase
         uses: w9jds/firebase-action@master
