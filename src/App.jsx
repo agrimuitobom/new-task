@@ -5,6 +5,7 @@ import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { FONT_SCALES, STATUSES, DOC_TEMPLATES, DEFAULT_TAGS, daysUntil } from "./constants";
 import { CaseProvider, useCases } from "./store/CaseContext";
 import { UIProvider, useUI } from "./store/UIContext";
+import { subscribePush, listenForeground } from "./lib/pushNotification";
 import KanbanView from "./components/KanbanView";
 import ListView from "./components/ListView";
 import GanttView from "./components/GanttView";
@@ -84,10 +85,21 @@ function AppShell({ user, onLogout }) {
   const [copiedId, setCopiedId] = useState(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [notifyEnabled, setNotifyEnabled] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+  const [pushToken, setPushToken] = useState(null);
   const [showDataMenu, setShowDataMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const fileInputRef = useRef(null);
   const moreMenuRef = useRef(null);
+
+  // ── Push notification setup ──
+  useEffect(() => {
+    if (!user) return;
+    // Auto-subscribe if permission already granted
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      subscribePush(user.uid).then((t) => { if (t) setPushToken(t); }).catch(() => {});
+    }
+    listenForeground().catch(() => {});
+  }, [user]);
 
   // Close more menu on outside click
   useEffect(() => {
@@ -125,7 +137,10 @@ function AppShell({ user, onLogout }) {
     if (!("Notification" in window)) { alert("このブラウザは通知に対応していません"); return; }
     Notification.requestPermission().then((perm) => {
       setNotifyEnabled(perm === "granted");
-      if (perm === "granted") checkAndNotify(cases);
+      if (perm === "granted") {
+        checkAndNotify(cases);
+        subscribePush(user.uid).then((t) => { if (t) setPushToken(t); }).catch(() => {});
+      }
     });
   }
 
@@ -221,8 +236,10 @@ function AppShell({ user, onLogout }) {
                   Aa 文字サイズ（{FONT_SCALES.find((sc) => sc.value === fontScale)?.label || "中"}）
                 </button>
                 {notifyEnabled
-                  ? <button onClick={() => { checkAndNotify(cases); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔔 通知チェック</button>
-                  : <button onClick={() => { requestNotification(); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔕 通知を有効にする</button>}
+                  ? <button onClick={() => { checkAndNotify(cases); setShowMoreMenu(false); }} className={s.moreMenuItem}>
+                      🔔 通知チェック{pushToken ? "（プッシュ通知ON）" : ""}
+                    </button>
+                  : <button onClick={() => { requestNotification(); setShowMoreMenu(false); }} className={s.moreMenuItem}>🔕 プッシュ通知を有効にする</button>}
                 <div className={s.moreMenuDivider} />
                 <button onClick={() => { setShowArchived((v) => !v); setShowMoreMenu(false); }} className={s.moreMenuItem}>
                   {showArchived ? `📂 通常表示に戻す` : `📦 アーカイブ (${archivedCount})`}
